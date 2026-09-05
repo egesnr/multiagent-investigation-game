@@ -1,37 +1,55 @@
-"""
-Core schemas for the open-world multi-agent investigation game.
+# Multi-Agent Police Investigation Game
 
-The authored CaseFile is fixed world truth.
-GameState is the shared interview context.
-Hidden truth may be used by the Checker/Resolution agent, but it must not leak
-into the War Room or Speaker unless the investigator has actually established it.
-"""
+An open-world investigation game powered by multiple AI agents.
 
-from enum import Enum
-from typing import Optional
-from pydantic import BaseModel, Field
+The player acts as an investigator interviewing a suspect, identifying contradictions, following leads, requesting evidence, and deciding whether the case is strong enough to support an arrest.
 
+The system separates **hidden world truth** from **investigator-visible evidence**, allowing suspects to lie, remain ambiguous, or reveal information gradually without leaking the authored solution to the player-facing agents.
 
-class Certainty(str, Enum):
-    FAST = "fast"
-    SLOW = "slow"
+## Architecture
 
+The game uses several cooperating agents with different responsibilities:
 
-class Weight(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+* **Strategist / War Room** — decides which investigative thread to pursue next.
+* **Speaker** — conducts the interview and generates the suspect-facing interaction.
+* **Checker** — evaluates claims, contradictions, evidence, and credibility.
+* **Resolution Agent** — performs final verification and determines the case outcome.
 
+A central `GameState` stores the shared investigation state across turns.
 
-class Fact(BaseModel):
-    id: str
-    description: str
-    true_value: str
-    weight: Weight
-    certainty: Certainty
-    visible_to: list[str]
+## Core Design Principle
 
+The authored `CaseFile` contains the fixed truth of the scenario.
 
+Hidden facts may be accessed by verification and resolution logic, but they must not leak into the investigator-facing context unless the investigator has actually established them through questioning or evidence.
+
+This separation prevents the interview agents from accidentally knowing the answer in advance.
+
+## Project Structure
+
+```text
+multiagent-investigation-game/
+├── agents.py
+├── app.py
+├── game_logic.py
+├── main.py
+├── models.py
+├── resolution.py
+├── smoke_test.py
+├── requirements.txt
+├── assets/
+│   └── investigator.png
+└── case_files/
+    └── restaurant_case.json
+```
+
+## Core Data Model
+
+### CaseFile
+
+A `CaseFile` defines the objective world state of a scenario.
+
+```python
 class CaseFile(BaseModel):
     scenario_type: str
     persona: str
@@ -40,149 +58,152 @@ class CaseFile(BaseModel):
     policy_rules: list[str] = Field(default_factory=list)
     arrest_threshold: int = 80
     claim_categories: list[str] = Field(default_factory=list)
+```
 
-    def visible_facts(self, actor: str) -> list[Fact]:
-        return [f for f in self.facts if actor in f.visible_to]
+Each fact can specify which actors are allowed to see it.
 
+```python
+def visible_facts(self, actor: str) -> list[Fact]:
+    return [f for f in self.facts if actor in f.visible_to]
+```
 
-class FindingBasis(str, Enum):
-    INVESTIGATOR_EVIDENCE = "investigator_evidence"
-    STORY_HISTORY = "story_history"
-    HIDDEN_TRUTH = "hidden_truth"
-    POLICY = "policy"
-    UNRESOLVED = "unresolved"
-    NONE = "none"
+### Case Log
 
+The `CaseLog` tracks what has actually been established during the investigation.
 
-class RiskProfile(BaseModel):
-    fact_contradiction: bool = False
-    story_contradiction: bool = False
-    policy_breach: bool = False
-    proof_deficit: bool = False
-    credibility_issue: bool = False
+It includes:
 
+* claims made by the suspect
+* open investigation leads
+* contradictions
+* admissions
+* credibility issues
+* evidence requests
+* unresolved claims
+* exhausted investigative targets
 
-class CheckResult(BaseModel):
-    fact_id: Optional[str] = None
-    risk_profile: RiskProfile = Field(default_factory=RiskProfile)
-    quoted_evidence: str
-    rationale: str
-    basis: FindingBasis = FindingBasis.NONE
-    investigator_visible: bool = True
-    materiality: str = "medium"
+The investigator-facing view explicitly removes hidden-truth findings.
 
+```python
+def investigator_view(self) -> dict:
+    """Safe context for investigator-facing agents."""
+```
 
-class ClaimStatus(str, Enum):
-    SUPPORTED = "supported"
-    CONTRADICTED = "contradicted"
-    UNVERIFIED = "unverified"
-    ADMITTED = "admitted"
+### GameState
 
+`GameState` represents the evolving investigation.
 
-class ClaimRecord(BaseModel):
-    text: str
-    turn: int
-    status: ClaimStatus = ClaimStatus.UNVERIFIED
-    related_fact_id: Optional[str] = None
-    rationale: Optional[str] = None
-    basis: FindingBasis = FindingBasis.NONE
-    investigator_visible: bool = True
-    materiality: str = "medium"
+It contains:
 
-
-class LeadStatus(str, Enum):
-    OPEN = "open"
-    PENDING_VERIFICATION = "pending_verification"
-    RESOLVED = "resolved"
-    EXHAUSTED = "exhausted"
-
-
-class InvestigationLead(BaseModel):
-    topic: str
-    source_claim: Optional[str] = None
-    status: LeadStatus = LeadStatus.OPEN
-    importance: str = "medium"
-    notes: Optional[str] = None
-
-
-class CaseLog(BaseModel):
-    claims: list[ClaimRecord] = Field(default_factory=list)
-    leads: list[InvestigationLead] = Field(default_factory=list)
-
-    contradictions: list[str] = Field(default_factory=list)
-    hidden_conflicts: list[str] = Field(default_factory=list)
-    admissions: list[str] = Field(default_factory=list)
-    active_defenses: list[str] = Field(default_factory=list)
-    credibility_flags: list[str] = Field(default_factory=list)
-
-    evidence_requested: list[str] = Field(default_factory=list)
-    unresolved_claims: list[str] = Field(default_factory=list)
-    exhausted_targets: list[str] = Field(default_factory=list)
-
-    def investigator_view(self) -> dict:
-        """Safe shared context for War Room/Speaker; hidden-truth findings are removed."""
-        return {
-            "claims": [
-                c.model_dump()
-                for c in self.claims
-                if c.investigator_visible
-            ],
-            "leads": [lead.model_dump() for lead in self.leads],
-            "contradictions": list(self.contradictions),
-            "admissions": list(self.admissions),
-            "active_defenses": list(self.active_defenses),
-            "credibility_flags": list(self.credibility_flags),
-            "evidence_requested": list(self.evidence_requested),
-            "unresolved_claims": list(self.unresolved_claims),
-            "exhausted_targets": list(self.exhausted_targets),
-        }
-
-
-class StrategistMove(BaseModel):
-    target: str = Field(description="Free-form investigation thread to pursue next")
-    tactic: str = Field(description="Allowed interview tactic")
-    rationale: str = Field(description="Internal strategy rationale")
-
-
-class VerificationStatus(str, Enum):
-    CONFIRMED = "confirmed"
-    DISPROVED = "disproved"
-    INCONCLUSIVE = "inconclusive"
-    NOT_MATERIAL = "not_material"
-
-
-class VerificationResult(BaseModel):
-    claim: str
-    status: VerificationStatus
-    basis: str
-    consequence: str
-
-
-class FinalOutcome(str, Enum):
-    CAUGHT = "CAUGHT"
-    NOT_PROVEN = "NOT_PROVEN"
-    POLICY_VIOLATION_ONLY = "POLICY_VIOLATION_ONLY"
-
-
-class ResolutionReport(BaseModel):
-    verifications: list[VerificationResult] = Field(default_factory=list)
-    outcome: FinalOutcome
-    confidence: str
-    reasoning: str
-    aftermath: str
-
-
+```python
 class GameState(BaseModel):
     case: CaseFile
-    transcript: list[dict] = Field(default_factory=list)
-    case_log: CaseLog = Field(default_factory=CaseLog)
+    transcript: list[dict]
+    case_log: CaseLog
 
     score: int = 0
     audit_debt: int = 0
     tier: int = 1
     question_count: int = 0
     max_questions: int = 7
+```
 
-    flagged_facts: list[str] = Field(default_factory=list)
-    last_move: Optional[str] = None
-    move_history: list[str] = Field(default_factory=list)
+It also tracks flagged facts, previous moves, and investigation history.
+
+## Investigation Flow
+
+A typical turn follows this structure:
+
+```text
+Investigator question
+        ↓
+Strategist chooses investigative target
+        ↓
+Speaker generates response
+        ↓
+Checker evaluates claims and contradictions
+        ↓
+CaseLog / GameState updated
+        ↓
+Next investigation turn
+```
+
+At the end of the investigation, the Resolution Agent evaluates the accumulated evidence.
+
+Possible outcomes include:
+
+```text
+CAUGHT
+NOT_PROVEN
+POLICY_VIOLATION_ONLY
+```
+
+## Evidence and Verification
+
+Claims can be classified as:
+
+```text
+SUPPORTED
+CONTRADICTED
+UNVERIFIED
+ADMITTED
+```
+
+Verification results can be:
+
+```text
+CONFIRMED
+DISPROVED
+INCONCLUSIVE
+NOT_MATERIAL
+```
+
+This distinction allows the game to model uncertainty instead of treating every statement as simply true or false.
+
+## Running the Project
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run the application:
+
+```bash
+python app.py
+```
+
+Or, depending on the entry point:
+
+```bash
+python main.py
+```
+
+## Security
+
+Local configuration and credentials should not be committed to Git.
+
+The repository should exclude files such as:
+
+```text
+.env
+.gradio/
+*.pem
+*.key
+```
+
+Use environment variables for API credentials.
+
+## Status
+
+This project is currently under active development.
+
+Current work includes improving:
+
+* multi-agent interview behavior
+* contradiction detection
+* evidence verification
+* investigation strategy
+* final case resolution
+* game balancing and scoring
