@@ -4,6 +4,14 @@ Post-interview Resolution Agent.
 The agent may see full authored truth, but the hidden guilty flag is a benchmark
 label, not evidence. Post-interview scoring only adds newly verified incriminating
 value from claims that could not be established during the interview.
+
+Two LLM calls, not one, and in this order on purpose: verifications are scored
+first, the numeric outcome is finalized in code, and only THEN is the narrative
+written — grounded in the outcome that's actually going to be shown. A single
+combined call was writing an aftermath like "terminated for gross misconduct"
+in the same breath as an outcome that the code then downgraded to NOT_PROVEN
+because the score fell short of the threshold, since the model had no way to
+know its own draft outcome would be overridden.
 """
 
 import os
@@ -24,18 +32,22 @@ from models import (
 )
 
 
-class ResolutionDraft(BaseModel):
-    """LLM-facing shape only. verification_score_delta and final_score are
-    always computed in code from `verifications` (see _verification_delta),
-    so they are never part of the schema the model has to fill in — asking
-    for them here would just be paying output tokens to guess a number that
-    gets thrown away."""
-
+class VerificationDraft(BaseModel):
     verifications: list[VerificationResult] = Field(default_factory=list)
-    outcome: FinalOutcome
+    outcome_recommendation: FinalOutcome = Field(
+        description="Your read of the evidentiary picture alone. The game "
+        "engine will independently enforce that CAUGHT requires the final "
+        "numeric score to reach the authored threshold — if it doesn't, this "
+        "recommendation is downgraded to NOT_PROVEN regardless of what you "
+        "pick here, so pick honestly rather than trying to game the check."
+    )
+
+
+class NarrativeDraft(BaseModel):
     confidence: str
     reasoning: str
     aftermath: str
+
 
 load_dotenv()
 MODEL_NAME = os.environ.get("GAME_MODEL", "gemini-3.1-flash-lite")
@@ -54,10 +66,10 @@ def get_llm(temperature: float = 0.2):
     return ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=temperature)
 
 
-resolution_prompt = ChatPromptTemplate.from_messages([
+verification_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
-        """You are the post-interview Resolution Agent.
+        """You are the post-interview Resolution Agent, verification stage.
 
 Resolve important UNVERIFIED/PENDING claims only as far as the authored world allows.
 The hidden guilty label is NOT evidence.
@@ -88,14 +100,7 @@ intentional wrongdoing created by the verification.
 - Each authored fact below is tagged [weight=..., certainty=...]. A
   disproof resting only on a certainty=slow fact (a review finding, an
   inference, a secondhand statement rather than a primary record) cannot be
-  scored above moderate, no matter how central the claim looks.
-
-Suggest an outcome based on the evidentiary picture, but the game engine will enforce
-that CAUGHT requires the final numeric case score to reach the authored threshold.
-
-AFTERMATH:
-Write a short realistic after-investigation story. General checking is fine, but any
-specific decisive result must come from authored facts."""
+  scored above moderate, no matter how central the claim looks."""
     ),
     (
         "human",
@@ -123,11 +128,50 @@ HIDDEN BENCHMARK LABEL (NOT EVIDENCE):
 ])
 
 
-def _verification_delta(report: ResolutionReport) -> int:
+narrative_prompt = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        """You are the post-interview Resolution Agent, narrative stage.
+
+The verification pass is already complete and the FINAL OUTCOME below is
+already decided by the game engine — it is not yours to choose or hedge
+against. Write reasoning and an aftermath that are consistent with that exact
+outcome:
+- CAUGHT: the case cleared the threshold. Write it as a case that stood up.
+- NOT_PROVEN: the case did not clear the threshold, whatever suspicion
+  remains. Do not write an aftermath implying termination, confession, or a
+  closed fraud case — write a realistic account of an investigation that
+  raised concerns without reaching a provable conclusion.
+- POLICY_VIOLATION_ONLY: real policy breaches were established, but not
+  intentional fraud. Write consequences proportionate to a policy violation
+  (a warning, discipline, repayment), not a fraud termination.
+
+Any specific decisive detail must come from the authored facts or verifications
+below, not invented. General/vague language ("standard review procedures
+continue") is fine when the record doesn't support anything more specific."""
+    ),
+    (
+        "human",
+        """FINAL OUTCOME (fixed, do not contradict): {outcome}
+Final case score: {final_score}/{threshold}
+
+VERIFICATIONS FROM THIS STAGE:
+{verifications}
+
+ALREADY-ESTABLISHED FINDINGS FROM THE INTERVIEW:
+{already_established}
+
+FULL INTERNAL CASE LOG:
+{case_log}"""
+    ),
+])
+
+
+def _verification_delta(verifications: list[VerificationResult]) -> int:
     """Only newly disproved pending claims add post-interview incriminating points."""
     seen: set[str] = set()
     total = 0
-    for result in report.verifications:
+    for result in verifications:
         key = " ".join(result.claim.lower().split())
         if key in seen:
             continue
@@ -155,12 +199,15 @@ def run_resolution(state: GameState) -> ResolutionReport:
         c.text for c in state.case_log.claims
         if c.status != ClaimStatus.UNVERIFIED and c.investigator_visible
     ]
+    already_established_text = "\n".join(f"- {t}" for t in already_established) or "- None"
 
-    chain = resolution_prompt | get_llm(0.2).with_structured_output(ResolutionDraft)
-    draft = chain.invoke({
+    verification_chain = (
+        verification_prompt | get_llm(0.2).with_structured_output(VerificationDraft)
+    )
+    verification_draft = verification_chain.invoke({
         "facts": facts,
         "policy": policy,
-        "already_established": "\n".join(f"- {t}" for t in already_established) or "- None",
+        "already_established": already_established_text,
         "case_log": state.case_log.model_dump(),
         "transcript": state.transcript,
         "score": state.score,
@@ -168,12 +215,14 @@ def run_resolution(state: GameState) -> ResolutionReport:
         "guilty_label": state.case.guilty,
     })
 
+    verifications = verification_draft.verifications
+
     # The prompt already tells the model "confirming/inconclusive => none
     # impact", but a rule stated only in the prompt can silently drift on any
     # given call. Force it here so a CONFIRMED or INCONCLUSIVE verification
     # can never carry a nonzero evidentiary_impact regardless of what the LLM
     # produced — only a DISPROVED verification is allowed to matter.
-    for v in draft.verifications:
+    for v in verifications:
         if v.status != VerificationStatus.DISPROVED:
             v.evidentiary_impact = EvidentiaryImpact.NONE
 
@@ -183,7 +232,7 @@ def run_resolution(state: GameState) -> ResolutionReport:
     # one-contains-the-other on normalized text, same tolerance the rest of
     # this codebase uses for claim dedup (see game_logic._claim_key).
     established_norm = [_normalize(t) for t in already_established]
-    for v in draft.verifications:
+    for v in verifications:
         v_norm = _normalize(v.claim)
         if any(
             v_norm == est or (len(est) > 20 and (est in v_norm or v_norm in est))
@@ -191,25 +240,39 @@ def run_resolution(state: GameState) -> ResolutionReport:
         ):
             v.evidentiary_impact = EvidentiaryImpact.NONE
 
-    report = ResolutionReport(
-        verifications=draft.verifications,
-        outcome=draft.outcome,
-        confidence=draft.confidence,
-        reasoning=draft.reasoning,
-        aftermath=draft.aftermath,
-    )
-
-    delta = _verification_delta(report)
-    report.verification_score_delta = delta
-    report.final_score = state.score + delta
+    delta = _verification_delta(verifications)
+    final_score = state.score + delta
 
     # Keep the numeric KPI and ending parallel: CAUGHT requires the threshold.
-    if report.final_score >= state.case.arrest_threshold:
-        report.outcome = FinalOutcome.CAUGHT
-    elif report.outcome == FinalOutcome.CAUGHT:
-        report.outcome = FinalOutcome.NOT_PROVEN
+    # This is decided BEFORE the narrative is written, not after, so the
+    # aftermath text is never generated against an outcome the code is about
+    # to override.
+    if final_score >= state.case.arrest_threshold:
+        outcome = FinalOutcome.CAUGHT
+    elif verification_draft.outcome_recommendation == FinalOutcome.CAUGHT:
+        outcome = FinalOutcome.NOT_PROVEN
+    else:
+        outcome = verification_draft.outcome_recommendation
 
-    return report
+    narrative_chain = narrative_prompt | get_llm(0.3).with_structured_output(NarrativeDraft)
+    narrative = narrative_chain.invoke({
+        "outcome": outcome.value,
+        "final_score": final_score,
+        "threshold": state.case.arrest_threshold,
+        "verifications": [v.model_dump() for v in verifications] or "- None",
+        "already_established": already_established_text,
+        "case_log": state.case_log.model_dump(),
+    })
+
+    return ResolutionReport(
+        verifications=verifications,
+        outcome=outcome,
+        confidence=narrative.confidence,
+        reasoning=narrative.reasoning,
+        aftermath=narrative.aftermath,
+        verification_score_delta=delta,
+        final_score=final_score,
+    )
 
 
 def format_resolution(report: ResolutionReport) -> str:
