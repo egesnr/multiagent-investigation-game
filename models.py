@@ -120,7 +120,13 @@ class EvidenceAssessment(BaseModel):
     fact_id: Optional[str] = None
     rationale: str
     basis: FindingBasis = FindingBasis.UNRESOLVED
-    investigator_visible: bool = True
+    # No investigator_visible field here: Stage 1 is only ever shown
+    # investigator-visible facts (hidden authored truth never reaches the
+    # interview pipeline), so every EvidenceAssessment is visible by
+    # construction. CheckResult still carries investigator_visible=True as a
+    # forced constant (see agents._merge_checker_results) so downstream
+    # filtering code keeps a hook for that invariant, but nothing upstream is
+    # ever asked to re-decide it.
     is_admission: bool = Field(
         default=False,
         description="True only if the suspect explicitly and directly confesses "

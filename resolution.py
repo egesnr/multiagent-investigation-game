@@ -10,14 +10,30 @@ import os
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel, Field
 
 from models import (
     EvidentiaryImpact,
     FinalOutcome,
     GameState,
     ResolutionReport,
+    VerificationResult,
     VerificationStatus,
 )
+
+
+class ResolutionDraft(BaseModel):
+    """LLM-facing shape only. verification_score_delta and final_score are
+    always computed in code from `verifications` (see _verification_delta),
+    so they are never part of the schema the model has to fill in — asking
+    for them here would just be paying output tokens to guess a number that
+    gets thrown away."""
+
+    verifications: list[VerificationResult] = Field(default_factory=list)
+    outcome: FinalOutcome
+    confidence: str
+    reasoning: str
+    aftermath: str
 
 load_dotenv()
 MODEL_NAME = os.environ.get("GAME_MODEL", "gemini-3.1-flash-lite")
@@ -113,8 +129,8 @@ def run_resolution(state: GameState) -> ResolutionReport:
     )
     policy = "\n".join(f"- {p}" for p in state.case.policy_rules)
 
-    chain = resolution_prompt | get_llm(0.2).with_structured_output(ResolutionReport)
-    report = chain.invoke({
+    chain = resolution_prompt | get_llm(0.2).with_structured_output(ResolutionDraft)
+    draft = chain.invoke({
         "facts": facts,
         "policy": policy,
         "case_log": state.case_log.model_dump(),
@@ -123,6 +139,23 @@ def run_resolution(state: GameState) -> ResolutionReport:
         "threshold": state.case.arrest_threshold,
         "guilty_label": state.case.guilty,
     })
+
+    # The prompt already tells the model "confirming/inconclusive => none
+    # impact", but a rule stated only in the prompt can silently drift on any
+    # given call. Force it here so a CONFIRMED or INCONCLUSIVE verification
+    # can never carry a nonzero evidentiary_impact regardless of what the LLM
+    # produced — only a DISPROVED verification is allowed to matter.
+    for v in draft.verifications:
+        if v.status != VerificationStatus.DISPROVED:
+            v.evidentiary_impact = EvidentiaryImpact.NONE
+
+    report = ResolutionReport(
+        verifications=draft.verifications,
+        outcome=draft.outcome,
+        confidence=draft.confidence,
+        reasoning=draft.reasoning,
+        aftermath=draft.aftermath,
+    )
 
     delta = _verification_delta(report)
     report.verification_score_delta = delta

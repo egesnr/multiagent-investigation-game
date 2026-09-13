@@ -383,16 +383,16 @@ For every supplied assessment determine:
 
 STRICT RULES:
 - Preserve the Evidence Checker's verification_status exactly as given.
-- Preserve basis and investigator_visible exactly as given.
+- Preserve basis exactly as given.
 - Do not turn an unresolved claim into a contradiction.
-- fact_contradiction and story_contradiction will be overwritten downstream
-  based on verification_status and basis — set them to your best guess, but
-  do not spend extra effort second-guessing basis to influence them.
+- fact_contradiction, story_contradiction, and policy_breach will all be
+  overwritten downstream to false whenever verification_status is unverified
+  — set them to your best guess, but do not spend extra effort second-guessing
+  basis to influence them.
 - If verification_status is unverified:
   - fact_contradiction=false
   - story_contradiction=false
-  - evidentiary_impact=none
-- If investigator_visible=false:
+  - policy_breach=false
   - evidentiary_impact=none
 - Suspiciousness, implausibility, or future checkability are not current evidence.
 - A claim may have high future_verification_value while evidentiary_impact=none.
@@ -458,10 +458,7 @@ def _merge_checker_results(
             significance = InvestigativeSignificance(claim=evidence.claim)
 
         impact = significance.evidentiary_impact
-        if (
-            evidence.verification_status == ClaimStatus.UNVERIFIED
-            or not evidence.investigator_visible
-        ):
+        if evidence.verification_status == ClaimStatus.UNVERIFIED:
             impact = EvidentiaryImpact.NONE
 
         risk_profile = significance.risk_profile.model_copy(deep=True)
@@ -480,6 +477,14 @@ def _merge_checker_results(
         else:
             risk_profile.fact_contradiction = False
             risk_profile.story_contradiction = False
+
+        # policy_breach means an established (non-unresolved) fact actually
+        # violates a policy rule. Same reasoning as fact/story contradiction
+        # above: an UNVERIFIED claim cannot itself establish a breach, so this
+        # is forced false in code instead of trusting Stage 2 to remember the
+        # rule on every call.
+        if evidence.verification_status == ClaimStatus.UNVERIFIED:
+            risk_profile.policy_breach = False
 
         # claim_type is forced from upstream fields wherever they already
         # settle the answer, so two independent LLM calls can never disagree
@@ -500,7 +505,8 @@ def _merge_checker_results(
             quoted_evidence=evidence.claim,
             rationale=evidence.rationale,
             basis=evidence.basis,
-            investigator_visible=evidence.investigator_visible,
+            # Always True: see the note on EvidenceAssessment in models.py.
+            investigator_visible=True,
             relation=evidence.relation,
             claim_type=claim_type,
             verification_status=evidence.verification_status,
