@@ -401,6 +401,24 @@ class RealityGateResult(BaseModel):
 
 
 class StrategistMove(BaseModel):
+    # case_review is declared FIRST on purpose: structured output is generated
+    # field by field in schema order, so this forces the model to actually
+    # reason in prose about the whole case BEFORE it commits to target/tactic,
+    # instead of picking a target first and writing a justification for it
+    # afterward. See agents.strategist_prompt for what this must cover.
+    case_review: str = Field(
+        description="Think through the case so far in your own words before "
+        "deciding anything: what is the suspect's actual central claim or "
+        "defense, which currently-unresolved points already carry high "
+        "strategic_value in the case log regardless of how long ago they "
+        "were raised, and which of those is still genuinely untested. This "
+        "is not a summary for its own sake — your target below must follow "
+        "from what you conclude here. Every factual assertion you make here "
+        "must trace back to something actually present in known_facts or the "
+        "case log below — never state a document, record, signature, or "
+        "outside check as existing or confirmed unless it is literally there. "
+        "If something is unconfirmed, say it is unconfirmed."
+    )
     target: str = Field(description="Free-form investigation thread to pursue next")
     tactic: str = Field(description="Allowed interview tactic")
     rationale: str = Field(
