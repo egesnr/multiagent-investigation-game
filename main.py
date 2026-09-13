@@ -76,14 +76,13 @@ def load_case(path: str = DEFAULT_CASE_PATH) -> CaseFile:
 
 
 def opening_question(case: CaseFile) -> str:
+    # Keyed off the shape of the data (a dollar-amount true_value) rather than
+    # fuzzy keyword matching on the description text, which previously broke
+    # silently: "charge" as a substring of "charged" matched an unrelated
+    # fact once the case file's wording changed.
     visible = case.visible_facts("investigator_start")
     amount_fact = next(
-        (
-            f for f in visible
-            if "amount" in f.id.lower()
-            or "transaction" in f.description.lower()
-            or "charge" in f.description.lower()
-        ),
+        (f for f in visible if f.true_value.strip().startswith("$")),
         None,
     )
 

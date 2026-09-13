@@ -1,87 +1,148 @@
 {
   "scenario_type": "expense fraud",
-  "persona": "Senior Corporate Fraud Auditor, sharp and methodical",
+  "persona": "Senior Corporate Fraud Auditor named Dana Whitfield: sharp, methodical, unhurried. Has done hundreds of these interviews and does not raise her voice to show she's angry — she goes quieter and more precise instead. Not cruel, but not warm either; she will let a silence sit if it does more work than a question would.",
   "guilty": true,
   "arrest_threshold": 80,
   "policy_rules": [
     "Itemized Receipt Mandatory: Any corporate card charge over $100 requires an itemized receipt showing line items.",
-    "24-Hour Reporting Policy: Any suspected billing error, unauthorized charge, or material transaction issue over $200 must be reported to Finance or the card issuer within 24 hours.",
-    "Individual Meal Cap: Non-client individual meals on business trips are capped at $75 USD per day unless an approved exception exists."
+    "24-Hour Reporting Policy: Any suspected billing error, unauthorized charge, or material transaction issue over $200 must be reported to Finance or the card issuer within 24 hours of the cardholder becoming aware of it.",
+    "Individual Meal Cap: Non-client individual meals on business trips are capped at $75 USD per day unless an approved exception exists on file before the trip.",
+    "Concealment Clause: Failing to disclose a known discrepancy on one's own card, once aware of it, is itself a reportable conduct issue independent of whether the underlying charge is ultimately found to be valid."
   ],
   "facts": [
     {
       "id": "solo_dinner",
-      "description": "Suspect dined alone; reservation was for one person",
+      "description": "The restaurant reservation for that table was for one person, and the suspect's corporate card was the only card charged",
       "true_value": "true",
       "weight": "high",
       "certainty": "fast",
-      "visible_to": [
-        "suspect",
-        "investigator_start"
-      ]
+      "visible_to": ["suspect", "investigator_start"]
     },
     {
       "id": "no_client_meeting",
-      "description": "No client meeting occurred that night",
+      "description": "No client, prospect, or vendor meeting was scheduled or occurred that evening",
       "true_value": "true",
       "weight": "high",
       "certainty": "fast",
-      "visible_to": [
-        "suspect"
-      ]
+      "visible_to": ["suspect"]
     },
     {
       "id": "no_calendar_entry",
-      "description": "No calendar entry exists for that night",
+      "description": "The suspect's work calendar has no entry of any kind for that evening",
       "true_value": "true",
       "weight": "medium",
       "certainty": "fast",
-      "visible_to": [
-        "suspect",
-        "investigator_start"
-      ]
+      "visible_to": ["suspect", "investigator_start"]
     },
     {
       "id": "actual_amount",
-      "description": "The corporate card transaction settled to the restaurant",
+      "description": "The corporate card transaction that settled to the restaurant that night",
       "true_value": "$3,200",
       "weight": "high",
       "certainty": "fast",
-      "visible_to": [
-        "suspect",
-        "investigator_start"
-      ]
+      "visible_to": ["suspect", "investigator_start"]
     },
     {
       "id": "no_supporting_documentation",
-      "description": "No supporting documentation or approval explaining the exceptional expense was submitted with the transaction",
+      "description": "No itemized receipt, exception approval, or explanatory note was ever attached to this transaction in the expense system",
       "true_value": "true",
       "weight": "high",
       "certainty": "fast",
-      "visible_to": [
-        "investigator_start"
-      ]
+      "visible_to": ["investigator_start"]
     },
     {
       "id": "no_prior_issue_report",
-      "description": "No issue concerning the transaction was reported through company or card channels before the investigation began",
+      "description": "Neither Finance nor the card issuer received any report, dispute, or flag on this transaction from the suspect before the audit began",
       "true_value": "true",
       "weight": "high",
       "certainty": "fast",
-      "visible_to": [
-        "investigator_start"
-      ]
+      "visible_to": ["investigator_start"]
     },
     {
-      "id": "standard_record_review",
-      "description": "The records available before the interview contain no documented explanation that resolves why the transaction differs from normal policy expectations",
+      "id": "flagged_by_routine_audit",
+      "description": "This transaction was not self-reported; it surfaced three weeks after the charge, during a routine quarterly review of card spend over $1,000",
       "true_value": "true",
       "weight": "medium",
       "certainty": "fast",
-      "visible_to": [
-        "investigator_start"
-      ]
+      "visible_to": ["investigator_start"]
+    },
+    {
+      "id": "trip_approved",
+      "description": "The suspect was on a company-approved four-day trip to Stockholm, Sweden (Sept 2–5) for the Nordic Supplier Summit",
+      "true_value": "true",
+      "weight": "low",
+      "certainty": "fast",
+      "visible_to": ["suspect", "investigator_start"]
+    },
+    {
+      "id": "dinner_within_trip_window",
+      "description": "The dinner transaction date (Sept 4) falls inside the approved trip window, on an evening with no business activity listed on the approved itinerary",
+      "true_value": "true",
+      "weight": "medium",
+      "certainty": "fast",
+      "visible_to": ["suspect", "investigator_start"]
+    },
+    {
+      "id": "prior_similar_incident",
+      "description": "Card issuer records show one earlier personal-meal charge from the same cardholder in March that also exceeded the daily meal cap; it was repaid in full only after the issuer flagged it, not self-reported",
+      "true_value": "true",
+      "weight": "high",
+      "certainty": "fast",
+      "visible_to": ["investigator_start"]
+    },
+    {
+      "id": "aware_of_cap_from_march",
+      "description": "The suspect was personally notified in writing by Finance about the meal cap and reporting policy when the March incident was resolved",
+      "true_value": "true",
+      "weight": "high",
+      "certainty": "fast",
+      "visible_to": ["suspect", "investigator_start"]
+    },
+    {
+      "id": "colleague_on_trip",
+      "description": "A colleague who traveled on the same trip, Ravi Chen, gave a brief preliminary statement that he had his own separate dinner alone that night and did not see or dine with the suspect",
+      "true_value": "true",
+      "weight": "medium",
+      "certainty": "fast",
+      "visible_to": ["investigator_start"]
+    },
+    {
+      "id": "true_reason",
+      "description": "The suspect chose an expensive solo dinner as a way to unwind after a difficult client call earlier that day, intending at the time to quietly cover the overage personally later, but never followed through",
+      "true_value": "true",
+      "weight": "medium",
+      "certainty": "fast",
+      "visible_to": ["suspect"]
+    },
+    {
+      "id": "itemized_bill_content",
+      "description": "The restaurant's itemized bill for that table, once obtained from the restaurant after the interview, lists a single diner, one $1,150 bottle of wine, and one steak entrée — nothing consistent with a client dinner or a billing multiplication error",
+      "true_value": "true",
+      "weight": "high",
+      "certainty": "slow",
+      "visible_to": []
+    },
+    {
+      "id": "restaurant_no_billing_correction",
+      "description": "The restaurant's own records, once checked after the interview, show no refund, correction, complaint, or void filed against that table's bill on that date",
+      "true_value": "true",
+      "weight": "high",
+      "certainty": "slow",
+      "visible_to": []
+    },
+    {
+      "id": "no_card_dispute_filed",
+      "description": "The suspect never filed a dispute or fraud claim with the card issuer for this charge, even though the issuer's standard 60-day dispute window remained open the entire time before the audit began",
+      "true_value": "true",
+      "weight": "medium",
+      "certainty": "slow",
+      "visible_to": []
     }
   ],
-  "claim_categories": []
+  "claim_categories": [],
+  "room_objects": [
+    "a printed copy of the corporate card statement for the trip",
+    "a printed copy of the expense policy handbook, meal-cap section tabbed"
+  ],
+  "present_people": ["suspect", "investigator", "an HR representative taking notes, not speaking"]
 }

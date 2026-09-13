@@ -50,6 +50,20 @@ class CaseFile(BaseModel):
         return [f for f in self.facts if actor in f.visible_to]
 
 
+def format_facts(facts: list[Fact]) -> str:
+    """Shared fact-rendering used by every LLM-facing prompt that reasons
+    over authored facts (Checker, War Room, Resolution), so weight/certainty
+    are always shown consistently instead of being silently dropped in some
+    call sites and not others."""
+    if not facts:
+        return "- None"
+    return "\n".join(
+        f"- {f.id}: {f.description} = {f.true_value} "
+        f"[weight={f.weight.value}, certainty={f.certainty.value}]"
+        for f in facts
+    )
+
+
 class FindingBasis(str, Enum):
     INVESTIGATOR_EVIDENCE = "investigator_evidence"
     STORY_HISTORY = "story_history"

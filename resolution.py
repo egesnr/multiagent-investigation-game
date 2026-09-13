@@ -19,6 +19,7 @@ from models import (
     ResolutionReport,
     VerificationResult,
     VerificationStatus,
+    format_facts,
 )
 
 
@@ -77,6 +78,10 @@ intentional wrongdoing created by the verification.
 - Disproving a central defense may be moderate/strong/decisive depending on how
   directly it bears on intentional wrongdoing.
 - Do not inflate impact just to reach the threshold.
+- Each authored fact below is tagged [weight=..., certainty=...]. A
+  disproof resting only on a certainty=slow fact (a review finding, an
+  inference, a secondhand statement rather than a primary record) cannot be
+  scored above moderate, no matter how central the claim looks.
 
 Suggest an outcome based on the evidentiary picture, but the game engine will enforce
 that CAUGHT requires the final numeric case score to reach the authored threshold.
@@ -123,10 +128,7 @@ def _verification_delta(report: ResolutionReport) -> int:
 
 
 def run_resolution(state: GameState) -> ResolutionReport:
-    facts = "\n".join(
-        f"- {f.id}: {f.description} = {f.true_value}"
-        for f in state.case.facts
-    )
+    facts = format_facts(state.case.facts)
     policy = "\n".join(f"- {p}" for p in state.case.policy_rules)
 
     chain = resolution_prompt | get_llm(0.2).with_structured_output(ResolutionDraft)

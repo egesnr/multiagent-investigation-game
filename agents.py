@@ -34,6 +34,7 @@ from models import (
     RealityGateResult,
     StrategistMove,
     EvidenceRelation,
+    format_facts,
 )
 
 load_dotenv()
@@ -46,6 +47,8 @@ def get_llm(temperature: float = 0.3):
         model=MODEL_NAME,
         temperature=temperature,
     )
+
+
 
 
 reality_gate_prompt = ChatPromptTemplate.from_messages([
@@ -412,6 +415,15 @@ EVIDENTIARY IMPACT RUBRIC (apply exactly one, do not blend):
 Pick the lowest level that the evidence actually supports. Do not round up
 because a claim feels important; do not round down because a claim feels
 uncomfortable to score highly.
+
+CERTAINTY CEILING: each known fact is tagged [weight=..., certainty=...].
+certainty=fast means a hard record (a settled transaction, a logged
+reservation) capable of supporting any impact level up to decisive.
+certainty=slow means the investigator's knowledge here is a review finding,
+pattern, or inference rather than a primary record — evidence resting only on
+a certainty=slow fact can never be scored above moderate, no matter how
+central the claim looks, because the underlying knowledge isn't airtight
+enough to be decisive on its own.
 - Do not invent evidence.
 - Do not invent policy conditions that are not established.
 - suggested_thread should be a verification/investigation thread, not a scripted interview question.
@@ -532,10 +544,7 @@ def run_checker(
         return []
 
     visible_facts = case.visible_facts("investigator_start")
-    known_facts = "\n".join(
-        f"- {f.id}: {f.description} = {f.true_value}"
-        for f in visible_facts
-    ) or "- None"
+    known_facts = format_facts(visible_facts)
     policy = "\n".join(f"- {p}" for p in case.policy_rules) or "- None"
     visible_case_log = case_log.investigator_view() if case_log else {}
     recent_transcript = (transcript or [])[-12:]
@@ -629,11 +638,7 @@ class WarRoomBundle(BaseModel):
 
 
 def _known_facts(state: GameState) -> str:
-    facts = state.case.visible_facts("investigator_start")
-    return "\n".join(
-        f"- {f.id}: {f.description} = {f.true_value}"
-        for f in facts
-    ) or "- None"
+    return format_facts(state.case.visible_facts("investigator_start"))
 
 
 evidence_prompt = ChatPromptTemplate.from_messages([
