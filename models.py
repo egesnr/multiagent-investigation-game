@@ -1,183 +1,354 @@
 """
-CLI orchestration for the multi-agent investigation game.
+Core schemas for the open-world multi-agent investigation game.
+
+The authored CaseFile is fixed world truth.
+GameState is the shared interview context.
+Hidden truth may be used by the Checker/Resolution agent, but it must not leak
+into the War Room or Speaker unless the investigator has actually established it.
 """
 
-import json
-
-from models import CaseFile, GameState
-from game_logic import (
-    apply_tier,
-    case_decisively_resolved,
-    dedupe_results,
-    process_turn_scoring,
-)
-from agents import run_checker, run_extractor, run_speaker, run_strategist
-from resolution import format_resolution, run_resolution
+from enum import Enum
+from typing import Optional
+from pydantic import BaseModel, Field
 
 
-DEFAULT_CASE_PATH = "case_files/restaurant_case.json"
+class Certainty(str, Enum):
+    FAST = "fast"
+    SLOW = "slow"
 
 
-def load_case(path: str = DEFAULT_CASE_PATH) -> CaseFile:
-    with open(path, encoding="utf-8") as f:
-        return CaseFile(**json.load(f))
+class Weight(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
-def opening_question(case: CaseFile) -> str:
-    visible = case.visible_facts("investigator_start")
-    amount_fact = next(
-        (
-            f for f in visible
-            if "amount" in f.id.lower()
-            or "transaction" in f.description.lower()
-            or "charge" in f.description.lower()
-        ),
-        None,
-    )
-
-    if amount_fact:
-        return (
-            "Walk me through this expense from the beginning. "
-            f"I want you to explain the {amount_fact.true_value} transaction."
-        )
-    return f"Walk me through what happened in this {case.scenario_type} review."
+class Fact(BaseModel):
+    id: str
+    description: str
+    true_value: str
+    weight: Weight
+    certainty: Certainty
+    visible_to: list[str]
 
 
-def format_player_briefing(case: CaseFile) -> str:
+class CaseFile(BaseModel):
+    scenario_type: str
+    persona: str
+    guilty: bool
+    facts: list[Fact]
+    policy_rules: list[str] = Field(default_factory=list)
+    arrest_threshold: int = 80
+    claim_categories: list[str] = Field(default_factory=list)
+
+    # Physical/world state is deliberately narrow. Open-world speech is allowed,
+    # but the player cannot conjure objects or people into the room by typing it.
+    room_objects: list[str] = Field(default_factory=list)
+    present_people: list[str] = Field(default_factory=lambda: ["suspect", "investigator"])
+
+    def visible_facts(self, actor: str) -> list[Fact]:
+        return [f for f in self.facts if actor in f.visible_to]
+
+
+class FindingBasis(str, Enum):
+    INVESTIGATOR_EVIDENCE = "investigator_evidence"
+    STORY_HISTORY = "story_history"
+    POLICY = "policy"
+    UNRESOLVED = "unresolved"
+
+
+class ClaimType(str, Enum):
     """
-    Suspect-facing briefing for CLI play.
-
-    The player knows their character's authored reality, but is not told the
-    investigator's exact evidence state.
+    ADMISSION and CONTRADICTION are always forced in code from
+    verification_status (never left to the LLM to re-guess).
+    DEFENSE is always forced in code from the Extractor's is_defense flag
+    (this absorbs the old EXPLANATION bucket, which had no content distinct
+    from DEFENSE). EVASION was dropped entirely as a claim_type: it already
+    exists as risk_profile.evasion and duplicating it here just invited the
+    two to disagree.
+    Only BACKGROUND and OTHER are genuine free judgment calls left for the
+    Stage 2 LLM.
     """
-    suspect_facts = case.visible_facts("suspect")
-    fact_lines = "\n".join(
-        f"- {f.description}: {f.true_value}"
-        for f in suspect_facts
-    ) or "- No additional suspect-only facts are defined."
-
-    return f"""=== CASE BRIEFING ===
-
-You are the employee being questioned in a {case.scenario_type} investigation.
-
-What you know happened:
-{fact_lines}
-
-Your objective:
-Avoid a final finding of intentional fraud.
-
-You may tell the truth, lie, mix truth with lies, evade, refuse to answer, or invent explanations. New claims do not automatically count as false, but they may create contradictions, credibility problems, or things investigators can try to verify later.
-
-You do not know exactly what the investigator has already confirmed.
-
-The investigator has a limited number of questions and will try to determine what most likely happened.
-"""
+    BACKGROUND = "background"
+    DEFENSE = "defense"
+    ADMISSION = "admission"
+    CONTRADICTION = "contradiction"
+    OTHER = "other"
 
 
-def run_turn(
-    state: GameState,
-    question: str,
-    player_answer: str,
-) -> tuple[GameState, str]:
-    state.transcript.append({"role": "investigator", "text": question})
-    state.transcript.append({"role": "suspect", "text": player_answer})
-    state.question_count += 1
+class ClaimStatus(str, Enum):
+    SUPPORTED = "supported"
+    CONTRADICTED = "contradicted"
+    UNVERIFIED = "unverified"
+    ADMITTED = "admitted"
 
-    extracted = run_extractor(question, player_answer)
 
-    for defense in extracted.new_defenses:
-        defense = defense.strip()
-        if defense and defense not in state.case_log.active_defenses:
-            state.case_log.active_defenses.append(defense)
+class EvidentiaryImpact(str, Enum):
+    NONE = "none"
+    WEAK = "weak"
+    MODERATE = "moderate"
+    STRONG = "strong"
+    DECISIVE = "decisive"
 
-    results = run_checker(
-        state.case,
-        extracted.claims,
-        transcript=state.transcript,
-        case_log=state.case_log,
+
+class FutureVerificationValue(str, Enum):
+    NONE = "none"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class RiskProfile(BaseModel):
+    fact_contradiction: bool = False
+    story_contradiction: bool = False
+    policy_breach: bool = False
+    credibility_issue: bool = False
+    evasion: bool = False
+
+
+class EvidenceRelation(str, Enum):
+    ENTAILS = "entails"
+    CONTRADICTS = "contradicts"
+    NEUTRAL = "neutral"
+
+class EvidenceAssessment(BaseModel):
+    claim: str = Field(...)
+    claim_proposition: str = Field(...)
+    evidence_proposition: str = Field(...)
+    relation: EvidenceRelation = Field(...)
+
+    fact_id: Optional[str] = None
+    rationale: str
+    basis: FindingBasis = FindingBasis.UNRESOLVED
+    investigator_visible: bool = True
+    is_admission: bool = Field(
+        default=False,
+        description="True only if the suspect explicitly and directly confesses "
+        "to a materially damaging fact in their own words, independent of any "
+        "evidence comparison."
     )
-    results = dedupe_results(results)
+    verification_status: ClaimStatus = ClaimStatus.UNVERIFIED  # computed after LLM call, not model output
+class InvestigativeSignificance(BaseModel):
+    """Stage 2: interpret investigative significance after status is fixed."""
 
-    turn_delta, state = process_turn_scoring(results, state, player_answer)
+    claim: str
+    risk_profile: RiskProfile = Field(default_factory=RiskProfile)
+    claim_type: ClaimType = ClaimType.BACKGROUND
+    strategic_value: str = Field(default="low", description="One of: low, medium, high")
+    future_verification_value: FutureVerificationValue = FutureVerificationValue.NONE
+    evidentiary_impact: EvidentiaryImpact = EvidentiaryImpact.NONE
+    suggested_thread: Optional[str] = None
 
-    for result in results:
-        rp = result.risk_profile
-        print(
-            "  [checker] "
-            f"basis={result.basis.value} | visible={result.investigator_visible} | "
-            f"fact_contradiction={rp.fact_contradiction} | "
-            f"story_contradiction={rp.story_contradiction} | "
-            f"policy_breach={rp.policy_breach} | "
-            f"proof_deficit={rp.proof_deficit} | "
-            f"credibility_issue={rp.credibility_issue} — "
-            f"\"{result.quoted_evidence}\""
-        )
 
-    print(
-        f"  [turn] +{turn_delta} | score={state.score} | "
-        f"questions={state.question_count}/{state.max_questions}"
+class CheckResult(BaseModel):
+    """Merged downstream result. Existing reducers and logs consume this schema."""
+
+    fact_id: Optional[str] = None
+    risk_profile: RiskProfile = Field(default_factory=RiskProfile)
+    quoted_evidence: str
+    rationale: str
+
+    # Internal source/visibility boundary. This is not the claim status.
+    basis: FindingBasis = FindingBasis.UNRESOLVED
+    investigator_visible: bool = True
+
+    # Preserves the Stage 1 logical comparison (ENTAILS/CONTRADICTS/NEUTRAL) that
+    # verification_status was derived from, so past turns can be audited later
+    # instead of only existing as a console print during the run.
+    relation: EvidenceRelation = EvidenceRelation.NEUTRAL
+
+    claim_type: ClaimType = ClaimType.BACKGROUND
+    verification_status: ClaimStatus = ClaimStatus.UNVERIFIED
+    strategic_value: str = Field(default="low", description="One of: low, medium, high")
+    future_verification_value: FutureVerificationValue = FutureVerificationValue.NONE
+    evidentiary_impact: EvidentiaryImpact = EvidentiaryImpact.NONE
+    suggested_thread: Optional[str] = None
+
+    # True when the Extractor could not cleanly resolve who/what a claim referred
+    # to and had to fall back to the weakest literal reading. Ambiguous claims
+    # must never be treated as a firm story-history contradiction (see game_logic).
+    ambiguous: bool = False
+
+
+class ClaimRecord(BaseModel):
+    text: str
+    turn: int
+    status: ClaimStatus = ClaimStatus.UNVERIFIED
+    related_fact_id: Optional[str] = None
+    rationale: Optional[str] = None
+    basis: FindingBasis = FindingBasis.UNRESOLVED
+    investigator_visible: bool = True
+    relation: EvidenceRelation = EvidenceRelation.NEUTRAL
+    claim_type: ClaimType = ClaimType.BACKGROUND
+    strategic_value: str = "low"
+    future_verification_value: FutureVerificationValue = FutureVerificationValue.NONE
+    evidentiary_impact: EvidentiaryImpact = EvidentiaryImpact.NONE
+    suggested_thread: Optional[str] = None
+    ambiguous: bool = False
+
+
+class ClaimNoveltyStatus(str, Enum):
+    NEW = "new"
+    REITERATED = "reiterated"
+    UPDATED = "updated"
+
+
+class ExtractedClaimItem(BaseModel):
+    text: str = Field(description="The complete, standalone factual claim.")
+    status: ClaimNoveltyStatus = Field(
+        description="NEW if not previously stated, REITERATED if it restates a "
+        "known_claim with the same meaning, UPDATED if it revises/replaces a "
+        "known_claim with a materially different version."
+    )
+    is_defense: bool = Field(
+        default=False,
+        description="True if this claim functions as an excuse, alternative "
+        "explanation, or unverified alibi rather than a plain factual admission.",
+    )
+    checkable: bool = Field(
+        default=True,
+        description="False only for pure opinion, emotional appeals, or rhetorical "
+        "statements with no factual content to verify.",
+    )
+    ambiguous: bool = Field(
+        default=False,
+        description="True if the suspect's wording could support more than one "
+        "reading (e.g. unclear who performed an action, unclear referent). When "
+        "true, `text` must contain the weakest/most literal reading that avoids "
+        "committing to any one interpretation.",
     )
 
-    if state.question_count >= state.max_questions:
-        closing = (
-            "That concludes the interview. Your statements will now be reviewed "
-            "against the available evidence."
-        )
-        state.transcript.append({"role": "investigator", "text": closing})
-        return state, closing
 
-    if case_decisively_resolved(state):
-        closing = "I have enough for now. This interview is concluded."
-        state.transcript.append({"role": "investigator", "text": closing})
-        return state, closing
+class ExtractedClaims(BaseModel):
+    claims: list[ExtractedClaimItem] = Field(default_factory=list)
+    new_defenses: list[str] = Field(default_factory=list)
 
-    _, allowed_moves = apply_tier(state.score)
-    move = run_strategist(state, allowed_moves)
 
-    state.last_move = f"{move.tactic}:{move.target}"
-    state.move_history.append(state.last_move)
+class LeadStatus(str, Enum):
+    OPEN = "open"
+    PENDING_VERIFICATION = "pending_verification"
+    RESOLVED = "resolved"
+    EXHAUSTED = "exhausted"
 
-    print(
-        f"  [strategy] tactic={move.tactic} | target={move.target} | "
-        f"remaining={state.max_questions - state.question_count}"
+
+class InvestigationLead(BaseModel):
+    topic: str
+    source_claim: Optional[str] = None
+    status: LeadStatus = LeadStatus.OPEN
+    importance: str = "medium"
+    future_verification_value: FutureVerificationValue = FutureVerificationValue.NONE
+    notes: Optional[str] = None
+
+
+class CaseLog(BaseModel):
+    claims: list[ClaimRecord] = Field(default_factory=list)
+    leads: list[InvestigationLead] = Field(default_factory=list)
+
+    contradictions: list[str] = Field(default_factory=list)
+    admissions: list[str] = Field(default_factory=list)
+    active_defenses: list[str] = Field(default_factory=list)
+    credibility_flags: list[str] = Field(default_factory=list)
+    evasions: list[str] = Field(default_factory=list)
+
+    unresolved_claims: list[str] = Field(default_factory=list)
+    parked_threads: list[str] = Field(default_factory=list)
+    exhausted_targets: list[str] = Field(default_factory=list)
+
+    def investigator_view(self) -> dict:
+        """Safe shared context for War Room/Speaker; hidden-truth findings are removed.
+
+        `relation` is deliberately excluded from each claim's dump here: it's kept
+        on ClaimRecord for later audit/debugging, but it says almost the same thing
+        as `status` in different words, so showing both to War Room/Speaker would
+        just be redundant tokens with no extra decision-making value for them.
+        """
+        return {
+            "claims": [
+                c.model_dump(exclude={"relation"})
+                for c in self.claims if c.investigator_visible
+            ],
+            "leads": [lead.model_dump() for lead in self.leads],
+            "contradictions": list(self.contradictions),
+            "admissions": list(self.admissions),
+            "active_defenses": list(self.active_defenses),
+            "credibility_flags": list(self.credibility_flags),
+            "evasions": list(self.evasions),
+            "unresolved_claims": list(self.unresolved_claims),
+            "parked_threads": list(self.parked_threads),
+            "exhausted_targets": list(self.exhausted_targets),
+        }
+
+
+class WorldAction(BaseModel):
+    action: str
+    action_type: str = Field(description="physical_object, person_presence, completed_check, environment_change, or other")
+    allowed: bool
+    reason: str
+
+
+class RealityGateResult(BaseModel):
+    analysis_text: str = Field(
+        description="Verbal/factual content that remains after blocked world-changing actions are removed"
     )
+    actions: list[WorldAction] = Field(default_factory=list)
+    blocked_message: Optional[str] = None
 
-    line = run_speaker(
-        state.case,
-        move,
-        state.transcript,
-        score=state.score,
-        case_log=state.case_log,
-    )
-    state.transcript.append({"role": "investigator", "text": line})
-    return state, line
+    @property
+    def has_blocked_action(self) -> bool:
+        return any(not action.allowed for action in self.actions)
 
 
-def get_final_resolution(state: GameState) -> str:
-    return format_resolution(run_resolution(state))
+class StrategistMove(BaseModel):
+    target: str = Field(description="Free-form investigation thread to pursue next")
+    tactic: str = Field(description="Allowed interview tactic")
+    rationale: str = Field(description="Internal strategy rationale")
+    expected_value: str = Field(default="medium", description="low, medium, or high")
 
 
-if __name__ == "__main__":
-    case = load_case()
-    state = GameState(case=case)
+class VerificationStatus(str, Enum):
+    CONFIRMED = "confirmed"
+    DISPROVED = "disproved"
+    INCONCLUSIVE = "inconclusive"
+    NOT_MATERIAL = "not_material"
 
-    print(format_player_briefing(case))
-    question = opening_question(case)
-    print(f"REVIEWER: {question}\n")
 
-    while state.question_count < state.max_questions:
-        answer = input("YOU: ")
-        state, next_line = run_turn(state, question, answer)
+class VerificationResult(BaseModel):
+    claim: str
+    status: VerificationStatus
+    basis: str
+    consequence: str
+    evidentiary_impact: EvidentiaryImpact = EvidentiaryImpact.NONE
 
-        print(
-            f"\n[score: {state.score} | tier: {state.tier} | "
-            f"questions: {state.question_count}/{state.max_questions}]"
-        )
-        print(f"REVIEWER: {next_line}\n")
-        question = next_line
 
-        if state.question_count >= state.max_questions or case_decisively_resolved(state):
-            break
+class FinalOutcome(str, Enum):
+    CAUGHT = "CAUGHT"
+    NOT_PROVEN = "NOT_PROVEN"
+    POLICY_VIOLATION_ONLY = "POLICY_VIOLATION_ONLY"
 
-    print("\n--- POST-INTERVIEW RESOLUTION ---")
-    print(get_final_resolution(state))
+
+class ResolutionReport(BaseModel):
+    verifications: list[VerificationResult] = Field(default_factory=list)
+    outcome: FinalOutcome
+    confidence: str
+    reasoning: str
+    aftermath: str
+    verification_score_delta: int = 0
+    final_score: int = 0
+
+
+class GameState(BaseModel):
+    case: CaseFile
+    transcript: list[dict] = Field(default_factory=list)
+    case_log: CaseLog = Field(default_factory=CaseLog)
+
+    score: int = 0
+    tier: int = 1
+    question_count: int = 0
+    max_questions: int = 7
+
+    scored_findings: list[str] = Field(default_factory=list)
+    last_turn_delta: int = 0
+    last_turn_usefulness: str = "unknown"
+    last_world_notice: Optional[str] = None
+    last_move: Optional[str] = None
+    move_history: list[str] = Field(default_factory=list)

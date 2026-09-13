@@ -1,9 +1,9 @@
 """
 Post-interview Resolution Agent.
 
-This agent may see full authored truth, but the hidden `guilty` flag is a
-benchmark label, NOT evidence. The agent must never fabricate decisive evidence
-just to make the benchmark label come true.
+The agent may see full authored truth, but the hidden guilty flag is a benchmark
+label, not evidence. Post-interview scoring only adds newly verified incriminating
+value from claims that could not be established during the interview.
 """
 
 import os
@@ -11,10 +11,25 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 
-from models import GameState, ResolutionReport
+from models import (
+    EvidentiaryImpact,
+    FinalOutcome,
+    GameState,
+    ResolutionReport,
+    VerificationStatus,
+)
 
 load_dotenv()
 MODEL_NAME = os.environ.get("GAME_MODEL", "gemini-3.1-flash-lite")
+
+
+IMPACT_POINTS = {
+    EvidentiaryImpact.NONE: 0,
+    EvidentiaryImpact.WEAK: 4,
+    EvidentiaryImpact.MODERATE: 8,
+    EvidentiaryImpact.STRONG: 15,
+    EvidentiaryImpact.DECISIVE: 25,
+}
 
 
 def get_llm(temperature: float = 0.2):
@@ -26,35 +41,33 @@ resolution_prompt = ChatPromptTemplate.from_messages([
         "system",
         """You are the post-interview Resolution Agent.
 
-The interview is over. Resolve important pending claims as far as the authored
-world actually allows, then produce the final game outcome.
+Resolve important UNVERIFIED/PENDING claims only as far as the authored world allows.
+The hidden guilty label is NOT evidence.
 
 STRICT RULES:
-- The hidden guilty label is NOT evidence and MUST NOT justify the outcome.
-- Do not invent CCTV, witnesses, emails, receipts, logs, or confessions that are
-  not supported by the authored facts or interview record.
+- Do not invent CCTV, witnesses, emails, receipts, logs, merchant responses, or
+  confessions not supported by authored facts or interview record.
 - If an open-world claim is neither supported nor contradicted by authored facts,
-  its verification result is INCONCLUSIVE.
-- If a claim directly conflicts with authored facts, it may be DISPROVED.
-- If it matches authored facts, it may be CONFIRMED.
-- A vague or unsupported story does not become exculpatory merely because it is
-  inconclusive.
-- Likewise, inconclusive claims are not proof of guilt.
-- Judge the total evidentiary picture: established contradictions, admissions,
-  policy breaches, credibility problems, and what remains genuinely uncertain.
+  mark it INCONCLUSIVE.
+- If authored facts directly conflict with it, it may be DISPROVED.
+- If authored facts directly support it, it may be CONFIRMED.
+- Inconclusive is neither guilt nor innocence.
 
-OUTCOMES:
-CAUGHT:
-  evidence is strong enough to justify intentional wrongdoing.
-NOT_PROVEN:
-  suspicion may remain, but intentional wrongdoing is not established strongly enough.
-POLICY_VIOLATION_ONLY:
-  non-compliance is established, but intentional fraud is not.
+EVIDENTIARY IMPACT:
+For each verification, evidentiary_impact means NEW incriminating value toward
+intentional wrongdoing created by the verification.
+- Confirming an innocent/exculpatory defense => none.
+- Inconclusive => none.
+- Disproving a central defense may be moderate/strong/decisive depending on how
+  directly it bears on intentional wrongdoing.
+- Do not inflate impact just to reach the threshold.
+
+Suggest an outcome based on the evidentiary picture, but the game engine will enforce
+that CAUGHT requires the final numeric case score to reach the authored threshold.
 
 AFTERMATH:
-Write a short realistic after-investigation story. You may say investigators
-reviewed/checked relevant records in general terms, but any decisive result must
-come from the authored facts. Do not invent specific evidence sources."""
+Write a short realistic after-investigation story. General checking is fine, but any
+specific decisive result must come from authored facts."""
     ),
     (
         "human",
@@ -71,12 +84,26 @@ TRANSCRIPT:
 {transcript}
 
 INTERVIEW SCORE:
-{score}
+{score}/{threshold}
 
 HIDDEN BENCHMARK LABEL (NOT EVIDENCE):
 {guilty_label}"""
     ),
 ])
+
+
+def _verification_delta(report: ResolutionReport) -> int:
+    """Only newly disproved pending claims add post-interview incriminating points."""
+    seen: set[str] = set()
+    total = 0
+    for result in report.verifications:
+        key = " ".join(result.claim.lower().split())
+        if key in seen:
+            continue
+        seen.add(key)
+        if result.status == VerificationStatus.DISPROVED:
+            total += IMPACT_POINTS[result.evidentiary_impact]
+    return total
 
 
 def run_resolution(state: GameState) -> ResolutionReport:
@@ -87,14 +114,27 @@ def run_resolution(state: GameState) -> ResolutionReport:
     policy = "\n".join(f"- {p}" for p in state.case.policy_rules)
 
     chain = resolution_prompt | get_llm(0.2).with_structured_output(ResolutionReport)
-    return chain.invoke({
+    report = chain.invoke({
         "facts": facts,
         "policy": policy,
         "case_log": state.case_log.model_dump(),
         "transcript": state.transcript,
         "score": state.score,
+        "threshold": state.case.arrest_threshold,
         "guilty_label": state.case.guilty,
     })
+
+    delta = _verification_delta(report)
+    report.verification_score_delta = delta
+    report.final_score = state.score + delta
+
+    # Keep the numeric KPI and ending parallel: CAUGHT requires the threshold.
+    if report.final_score >= state.case.arrest_threshold:
+        report.outcome = FinalOutcome.CAUGHT
+    elif report.outcome == FinalOutcome.CAUGHT:
+        report.outcome = FinalOutcome.NOT_PROVEN
+
+    return report
 
 
 def format_resolution(report: ResolutionReport) -> str:
@@ -102,5 +142,7 @@ def format_resolution(report: ResolutionReport) -> str:
         f"FINAL OUTCOME: {report.outcome.value}\n\n"
         f"{report.aftermath}\n\n"
         f"Reasoning: {report.reasoning}\n"
+        f"Verification score change: +{report.verification_score_delta}\n"
+        f"Final case score: {report.final_score}\n"
         f"Confidence: {report.confidence}"
     )
