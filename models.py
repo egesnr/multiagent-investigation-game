@@ -23,6 +23,20 @@ class Weight(str, Enum):
     HIGH = "high"
 
 
+class SuspectDemeanor(str, Enum):
+    """How the suspect is coming across in their CURRENT answer only — a
+    behavioral read, not an evidentiary one. Read fresh each turn (see
+    ExtractedClaims.demeanor); any trend across turns is derived in code from
+    the stored history, never re-asked of an LLM."""
+
+    COMPOSED = "composed"
+    COOPERATIVE = "cooperative"
+    DEFENSIVE = "defensive"
+    EVASIVE = "evasive"
+    AGGRESSIVE = "aggressive"
+    PANICKED = "panicked"
+
+
 class Fact(BaseModel):
     id: str
     description: str
@@ -242,6 +256,18 @@ class ExtractedClaimItem(BaseModel):
 class ExtractedClaims(BaseModel):
     claims: list[ExtractedClaimItem] = Field(default_factory=list)
     new_defenses: list[str] = Field(default_factory=list)
+    demeanor: SuspectDemeanor = Field(
+        default=SuspectDemeanor.COMPOSED,
+        description="Read only from THIS answer's tone and behavior, not the "
+        "conversation as a whole and not the factual content of the claims.",
+    )
+    demeanor_cue: str = Field(
+        default="",
+        description="One short phrase pointing at the specific tell that "
+        "justifies the demeanor call (e.g. 'raised voice, challenged my "
+        "authority to ask' or 'long hedge before answering, then over-"
+        "explained'). Empty only if the answer is too short to show any tell.",
+    )
 
 
 class LeadStatus(str, Enum):
@@ -321,7 +347,12 @@ class RealityGateResult(BaseModel):
 class StrategistMove(BaseModel):
     target: str = Field(description="Free-form investigation thread to pursue next")
     tactic: str = Field(description="Allowed interview tactic")
-    rationale: str = Field(description="Internal strategy rationale")
+    rationale: str = Field(
+        description="Internal strategy rationale. Must name which War Room "
+        "voice's read (Skeptic's push_now vs. Alternative's caution_move) "
+        "most shaped this move, and why the other one was outweighed this "
+        "turn — not a restatement of both, an actual adjudication."
+    )
     expected_value: str = Field(default="medium", description="low, medium, or high")
 
 
@@ -372,3 +403,33 @@ class GameState(BaseModel):
     last_world_notice: Optional[str] = None
     last_move: Optional[str] = None
     move_history: list[str] = Field(default_factory=list)
+
+    # One SuspectDemeanor value per turn, read fresh from that turn's answer
+    # only (see ExtractedClaims.demeanor). current_demeanor and the trend are
+    # both derived from this list in code — never stored separately, so
+    # there is nothing here for two code paths to disagree about.
+    demeanor_history: list[str] = Field(default_factory=list)
+    last_demeanor_cue: Optional[str] = None
+
+    @property
+    def current_demeanor(self) -> str:
+        return self.demeanor_history[-1] if self.demeanor_history else "composed"
+
+
+_ESCALATED_DEMEANORS = {"aggressive", "panicked"}
+_CALM_DEMEANORS = {"composed", "cooperative"}
+
+
+def demeanor_trend(history: list[str]) -> str:
+    """Pure code derivation from stored per-turn demeanor reads — the LLM is
+    never asked to judge the trend itself, only each turn's raw demeanor."""
+    if len(history) < 2:
+        return "opening move, no trend yet"
+    current, previous = history[-1], history[-2]
+    if current == previous:
+        return f"holding steady at {current}"
+    if current in _ESCALATED_DEMEANORS and previous not in _ESCALATED_DEMEANORS:
+        return f"escalating toward {current}"
+    if current in _CALM_DEMEANORS and previous not in _CALM_DEMEANORS:
+        return f"cooling from {previous} to {current}"
+    return f"shifting from {previous} to {current}"

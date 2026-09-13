@@ -24,6 +24,7 @@ from models import (
     CheckResult,
     EvidenceAssessment,
     ExtractedClaimItem,
+    ExtractedClaims,
     InvestigativeSignificance,
     ClaimStatus,
     ClaimType,
@@ -34,6 +35,7 @@ from models import (
     RealityGateResult,
     StrategistMove,
     EvidenceRelation,
+    demeanor_trend,
     format_facts,
 )
 
@@ -97,11 +99,6 @@ def run_reality_gate(state: GameState, answer: str) -> RealityGateResult:
         "transcript": state.transcript[-8:],
         "answer": answer,
     })
-
-
-class ExtractedClaims(BaseModel):
-    claims: list[ExtractedClaimItem] = Field(default_factory=list)
-    new_defenses: list[str] = Field(default_factory=list)
 
 
 extractor_prompt = ChatPromptTemplate.from_messages([
@@ -180,6 +177,24 @@ RULE 6 — SUSPECT-ONLY GROUNDING:
   known_claims is for comparison/deduplication only — it is never a source of
   new claims for the current turn.
 
+RULE 7 — DEMEANOR READING:
+Separately from claim content, read how the suspect is coming across in THIS
+answer only (ignore earlier turns entirely — that history is tracked
+elsewhere). Choose exactly one:
+- composed: calm, in control, answering directly.
+- cooperative: forthcoming, volunteering detail, engaged with the process.
+- defensive: justifying, minimizing, rushing to explain rather than answer.
+- evasive: dodging, non-answers, changing the subject, answering a different
+  question than the one asked.
+- aggressive: hostile, challenging the investigator's right to ask, raised
+  tone, attacking rather than answering.
+- panicked: flustered, self-contradicting within the same answer,
+  over-explaining, visible distress.
+Base this purely on tone/behavior in the wording actually used, not on
+whether the content sounds truthful. A calm liar is still composed; an
+innocent person who is furious at being accused is still aggressive.
+Give a one-phrase demeanor_cue naming the specific tell, or leave it empty
+only if the answer is too short/flat to show one.
 """
     ),
     (
@@ -613,22 +628,36 @@ def run_checker(
 class EvidenceView(BaseModel):
     established: list[str] = Field(default_factory=list)
     unresolved: list[str] = Field(default_factory=list)
-    important_gaps: list[str] = Field(default_factory=list)
-    priority: str
+    in_room_lever: str = Field(
+        description="The single unresolved point that further QUESTIONING "
+        "right now could still move. Never suggest fetching a document, "
+        "calling a witness, or checking a record — that is what leads/"
+        "parked_threads are for, not something this turn's tactic can do."
+    )
 
 
 class SkepticView(BaseModel):
     strongest_pressure_point: str
+    behavioral_read: str = Field(
+        description="What the suspect's demeanor and demeanor_cue this turn "
+        "actually suggest — calculated evasion, rehearsed composure, genuine "
+        "panic, etc. Ground this in the demeanor signal given, not a fresh "
+        "guess from the transcript."
+    )
     diversion_risk: str
-    strongest_inconsistency: Optional[str] = None
-    recommendation: str
+    push_now: str = Field(
+        description="The single most aggressive in-room move to make next "
+        "turn — a question or confrontation, not an outside check."
+    )
 
 
 class AlternativeView(BaseModel):
-    strongest_non_guilty_explanation: str
-    what_is_not_proven: str
+    strongest_innocent_reading: str
     fairness_risk: str
-    recommendation: str
+    caution_move: str = Field(
+        description="The single in-room move that fairly tests the innocent "
+        "reading without assuming guilt — a question, not an outside check."
+    )
 
 
 class WarRoomBundle(BaseModel):
@@ -647,7 +676,10 @@ evidence_prompt = ChatPromptTemplate.from_messages([
         """You are the Evidence Analyst in an internal war room.
 Separate established information from unresolved claims.
 Do not infer hidden truth and do not invent evidence.
-Choose the single issue that would most improve certainty."""
+Your job is bookkeeping, not persuasion: give the cleanest possible map of
+what stands and what doesn't, so the Skeptic and Alternative voices below
+can argue over what to do about it. Do not recommend a next move yourself —
+that is their job, not yours."""
     ),
     (
         "human",
@@ -659,6 +691,9 @@ Visible case log:
 
 Recent transcript:
 {transcript}
+
+Suspect demeanor this turn: {demeanor} ({demeanor_cue})
+Demeanor trend: {demeanor_trend}
 
 Questions remaining: {remaining}
 Current case strength: {score}/{threshold}
@@ -671,13 +706,21 @@ Recent strategy moves: {move_history}"""
 skeptic_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
-        """You are the Skeptical Investigator in an internal war room.
-Find the strongest legitimate pressure point: established contradictions,
-policy admissions, material unsupported explanations, evasion, or diversion.
+        """You are the Skeptical Investigator in an internal war room — the
+voice arguing to press harder, right now. Find the strongest legitimate
+pressure point: established contradictions, policy admissions, material
+unsupported explanations, evasion, or diversion. Read the suspect's demeanor
+and demeanor_cue as a real signal, not decoration — a composed suspect
+sitting on a strong contradiction is stalling; a suddenly panicked one just
+got close to something.
 
 Do not assume an unresolved claim is false.
 Do not invent evidence.
-Do not chase irrelevant side stories just because they are new."""
+Do not chase irrelevant side stories just because they are new.
+Do not propose fetching a document, calling a witness, or checking a record —
+propose what to ASK or how to CONFRONT, right now, in this room.
+You are arguing a position, not filing a status report: be willing to
+disagree with a more cautious read of the same facts."""
     ),
     (
         "human",
@@ -689,6 +732,9 @@ Visible case log:
 
 Recent transcript:
 {transcript}
+
+Suspect demeanor this turn: {demeanor} ({demeanor_cue})
+Demeanor trend: {demeanor_trend}
 
 Questions remaining: {remaining}
 Current case strength: {score}/{threshold}
@@ -701,11 +747,18 @@ Recent strategy moves: {move_history}"""
 alternative_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
-        """You are the Alternative-Hypothesis Investigator.
-Identify the strongest plausible non-fraud explanation that still fits what the
-investigator actually knows. Your job is to prevent tunnel vision.
+        """You are the Alternative-Hypothesis Investigator — the voice
+arguing for caution, right now. Identify the strongest plausible non-fraud
+explanation that still fits what the investigator actually knows, and name
+what would have to be true of an innocent person in this exact spot that this
+suspect hasn't shown yet. Your job is to prevent tunnel vision and stop the
+room from steamrolling a suspect who might be telling the truth.
 
-Do not invent evidence and do not treat unsupported claims as established."""
+Do not invent evidence and do not treat unsupported claims as established.
+Do not propose fetching a document, calling a witness, or checking a record —
+propose what to ASK, right now, that would fairly test the innocent reading.
+You are arguing a position against the Skeptic, not hedging: if the Skeptic's
+read is overreaching, say so plainly."""
     ),
     (
         "human",
@@ -717,6 +770,9 @@ Visible case log:
 
 Recent transcript:
 {transcript}
+
+Suspect demeanor this turn: {demeanor} ({demeanor_cue})
+Demeanor trend: {demeanor_trend}
 
 Questions remaining: {remaining}
 Current case strength: {score}/{threshold}
@@ -737,6 +793,9 @@ def _war_input(state: GameState) -> dict:
         "last_turn_delta": state.last_turn_delta,
         "last_turn_usefulness": state.last_turn_usefulness,
         "move_history": state.move_history[-6:],
+        "demeanor": state.current_demeanor,
+        "demeanor_cue": state.last_demeanor_cue or "no strong tell",
+        "demeanor_trend": demeanor_trend(state.demeanor_history),
     }
 
 
@@ -758,7 +817,7 @@ def run_alternative_hypothesis(state: GameState) -> AlternativeView:
 strategist_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
-        """You are the Lead Investigator.
+        """You are the Lead Investigator adjudicating your own war room.
 
 Your KPI is to build the strongest investigator-visible case possible within the
 remaining interview questions. The score is the current case-strength KPI toward
@@ -771,6 +830,22 @@ A zero-point answer can be:
 - NO USEFUL GAIN / EVASION: increase pressure, narrow the question, change tactic,
   or confront the evasion.
 
+REACT TO THE PERSON, NOT JUST THE TRANSCRIPT:
+- The Skeptic and Alternative voices disagree on purpose. Pick a side this turn
+  and say so in your rationale — do not average them into a generic question.
+- Demeanor and its trend are real signal. A suspect who just cracked from
+  composed into panicked or evasive right after a specific point should usually
+  be pressed on that exact point again, not moved past. A suspect staying
+  falsely calm/aggressive despite strong contradictions may call for direct
+  confrontation rather than another open question. A suspect who just turned
+  genuinely cooperative after pressure may open up further with a lighter touch
+  before you go back on the attack.
+- Silence is a real tactic: after a rehearsed or evasive non-answer, sometimes
+  the strongest move is to say almost nothing and let the gap sit, rather than
+  immediately filling it with the next question.
+- False sympathy is a real tactic: a brief show of understanding can lower a
+  defensive suspect's guard right before the real question lands.
+
 ANTI-REPETITION IS MANDATORY:
 - Read parked_threads, leads, and recent move_history.
 - Do not ask for the same commitment again once captured.
@@ -779,6 +854,13 @@ ANTI-REPETITION IS MANDATORY:
   after the interview.
 - Revisit a parked thread only if genuinely new information created a new
   contradiction or a materially different question.
+- Check move_history for the tactic label, not just the target: the same
+  tactic three turns running reads as a script even when the target text
+  changes each time. If the last two moves both used the same tactic and it
+  has not produced a concession, escalate (e.g. confront -> accuse) or
+  change register entirely (silence, pivot to an independent thread, false
+  sympathy to reset the suspect's guard) rather than reaching for it a third
+  time.
 
 QUESTION-BUDGET PRESSURE:
 - When case strength is weak and few questions remain, become selective and forceful:
@@ -797,16 +879,18 @@ You MUST select a tactic from Allowed Tactics. Target is free-form."""
 Questions remaining: {remaining}
 Last turn score gain: +{last_turn_delta}
 Last turn usefulness: {last_turn_usefulness}
+Suspect demeanor this turn: {demeanor} ({demeanor_cue})
+Demeanor trend: {demeanor_trend}
 Allowed Tactics: {allowed}
 Recent move history: {move_history}
 
-Evidence Analyst:
+Evidence Analyst (facts only, no recommendation):
 {evidence}
 
-Skeptic:
+Skeptic (arguing to press harder):
 {skeptic}
 
-Alternative Hypothesis:
+Alternative Hypothesis (arguing for caution):
 {alternative}
 
 Visible case log:
@@ -835,8 +919,11 @@ def run_strategist(
         "confront",
         "accuse",
         "pivot",
+        "silence",
+        "false_sympathy",
     ]
 
+    war_input = _war_input(state)
     chain = strategist_prompt | get_llm(0.3).with_structured_output(StrategistMove)
     move = chain.invoke({
         "score": state.score,
@@ -845,6 +932,9 @@ def run_strategist(
         "last_turn_delta": state.last_turn_delta,
         "last_turn_usefulness": state.last_turn_usefulness,
         "move_history": state.move_history[-6:],
+        "demeanor": war_input["demeanor"],
+        "demeanor_cue": war_input["demeanor_cue"],
+        "demeanor_trend": war_input["demeanor_trend"],
         "allowed": strategy_moves,
         "evidence": evidence.model_dump(),
         "skeptic": skeptic.model_dump(),
@@ -871,13 +961,37 @@ speaker_prompt = ChatPromptTemplate.from_messages([
         "system",
         """You are {persona} speaking directly to the suspect.
 
-The Lead Investigator chose the move. Sound like a skilled human investigator, not
-a questionnaire. You may show controlled frustration, skepticism, urgency, silence,
-or pressure when the suspect evades or the interview is running out. Do not become
-cartoonish or abusive.
+The Lead Investigator chose the move; your job is to deliver it like a real
+person in the room, not a questionnaire reading out its next field. Let your
+tone visibly track Suspect Demeanor and Demeanor Trend below — do not stay
+flatly neutral turn after turn. Do not become cartoonish or abusive.
 
-RULES:
-- maximum 2 sentences and one focused question,
+REACTING TO THE SUSPECT:
+- composed/cooperative: professional, can afford to be a shade warmer if they
+  just opened up.
+- defensive: stay dry and unimpressed with the justification; don't argue the
+  merits, just note it and press past it.
+- evasive: name the dodge plainly ("That's not what I asked.") before
+  re-asking or pivoting.
+- aggressive: do not escalate to match them, and do not fold either — go
+  quieter and more precise, which reads as more in control, not less.
+- panicked: this is often the moment to press, not comfort — a calm,
+  unhurried follow-up on exactly what they just tripped over does more than
+  raising your voice would.
+- escalating/cooling trend: if pressure is clearly working (cooling from a
+  harder demeanor toward cooperative), don't reflexively escalate further —
+  match what's actually happening instead of running one fixed script.
+
+TACTIC-SPECIFIC DELIVERY:
+- silence: 10 words or fewer. No new question — just enough to make the gap
+  uncomfortable (e.g. repeat their own last phrase back flatly, or nothing
+  more than "Take your time." / "I'll wait."). Let the discomfort be the move.
+- false_sympathy: open with one short, genuine-sounding beat of understanding
+  or common ground, then land the real question in the same breath — the
+  warmth is instrumental, not a change of heart.
+- every other tactic: maximum 2 sentences and one focused question.
+
+HARD RULES:
 - follow tactic and target,
 - use only Grounded Knowledge, Visible Case Log, or words actually spoken,
 - NEVER invent the contents, authenticity, markings, inspection results, or condition
@@ -886,7 +1000,7 @@ RULES:
 - never expose hidden case truth,
 - pressure may refer truthfully to future checking (e.g. records can be checked),
   but never claim the check already proved something,
-- do not mention scores, agents, war room, or game mechanics.
+- do not mention scores, agents, war room, demeanor, or any other game mechanics.
 
 Tone context: if the case is weak, few questions remain, and recent answers produced
 little useful material, increase urgency and pressure. If a valuable commitment is
@@ -899,6 +1013,8 @@ Target: {target}
 Current case strength: {score}/{threshold}
 Questions remaining: {remaining}
 Last turn usefulness: {last_turn_usefulness}
+Suspect demeanor this turn: {demeanor} ({demeanor_cue})
+Demeanor trend: {demeanor_trend}
 
 Grounded Knowledge:
 {known_facts}
@@ -921,6 +1037,9 @@ def run_speaker(
     case_log=None,
     remaining: int = 0,
     last_turn_usefulness: str = "unknown",
+    demeanor: str = "composed",
+    demeanor_cue: str = "no strong tell",
+    trend: str = "opening move, no trend yet",
 ) -> str:
     known_facts = "\n".join(
         f"- {f.description}: {f.true_value}"
@@ -936,6 +1055,9 @@ def run_speaker(
         "threshold": case.arrest_threshold,
         "remaining": remaining,
         "last_turn_usefulness": last_turn_usefulness,
+        "demeanor": demeanor,
+        "demeanor_cue": demeanor_cue,
+        "demeanor_trend": trend,
         "known_facts": known_facts,
         "case_log": case_log.investigator_view() if case_log else {},
         "transcript": transcript[-10:],

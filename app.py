@@ -146,7 +146,7 @@ with gr.Blocks(title="Multi-Agent Investigation Game") as demo:
 
     briefing_box = gr.Markdown()
     status_box = gr.HTML()
-    chatbot = gr.Chatbot(height=460, label="Investigation", type="messages")
+    chatbot = gr.Chatbot(height=460, label="Investigation")
     msg = gr.Textbox(
         label="Your answer",
         placeholder="Answer the investigator...",

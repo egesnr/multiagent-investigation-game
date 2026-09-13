@@ -13,6 +13,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 from models import (
+    ClaimStatus,
     EvidentiaryImpact,
     FinalOutcome,
     GameState,
@@ -61,6 +62,12 @@ resolution_prompt = ChatPromptTemplate.from_messages([
 Resolve important UNVERIFIED/PENDING claims only as far as the authored world allows.
 The hidden guilty label is NOT evidence.
 
+ALREADY-ESTABLISHED FINDINGS BELOW ALREADY CONTRIBUTED TO THE INTERVIEW SCORE.
+Do not re-verify them or assign them evidentiary_impact again — that would double-count
+the same fact. If your reasoning needs to reference one, use status=NOT_MATERIAL and
+evidentiary_impact=none for it. Only assign nonzero evidentiary_impact to a claim that
+was genuinely left UNVERIFIED or PENDING by the interview.
+
 STRICT RULES:
 - Do not invent CCTV, witnesses, emails, receipts, logs, merchant responses, or
   confessions not supported by authored facts or interview record.
@@ -98,6 +105,9 @@ specific decisive result must come from authored facts."""
 POLICY:
 {policy}
 
+ALREADY-ESTABLISHED FINDINGS (already scored — do not re-verify):
+{already_established}
+
 FULL INTERNAL CASE LOG:
 {case_log}
 
@@ -127,14 +137,30 @@ def _verification_delta(report: ResolutionReport) -> int:
     return total
 
 
+def _normalize(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
 def run_resolution(state: GameState) -> ResolutionReport:
     facts = format_facts(state.case.facts)
     policy = "\n".join(f"- {p}" for p in state.case.policy_rules)
+
+    # Anything the interview already resolved to a non-unverified status
+    # already contributed its evidentiary_impact to state.score. Without this,
+    # the Resolution Agent has no way to know a claim was already scored and
+    # can independently "confirm" the same underlying fact again, double-
+    # counting it (observed in practice: a contradiction already worth +30
+    # in-interview got re-verified and added again post-interview).
+    already_established = [
+        c.text for c in state.case_log.claims
+        if c.status != ClaimStatus.UNVERIFIED and c.investigator_visible
+    ]
 
     chain = resolution_prompt | get_llm(0.2).with_structured_output(ResolutionDraft)
     draft = chain.invoke({
         "facts": facts,
         "policy": policy,
+        "already_established": "\n".join(f"- {t}" for t in already_established) or "- None",
         "case_log": state.case_log.model_dump(),
         "transcript": state.transcript,
         "score": state.score,
@@ -149,6 +175,20 @@ def run_resolution(state: GameState) -> ResolutionReport:
     # produced — only a DISPROVED verification is allowed to matter.
     for v in draft.verifications:
         if v.status != VerificationStatus.DISPROVED:
+            v.evidentiary_impact = EvidentiaryImpact.NONE
+
+    # Code-side backstop for the same rule the prompt states above: even if
+    # the model restates an already-established finding as a fresh
+    # verification, it cannot carry additional points. Exact-match or
+    # one-contains-the-other on normalized text, same tolerance the rest of
+    # this codebase uses for claim dedup (see game_logic._claim_key).
+    established_norm = [_normalize(t) for t in already_established]
+    for v in draft.verifications:
+        v_norm = _normalize(v.claim)
+        if any(
+            v_norm == est or (len(est) > 20 and (est in v_norm or v_norm in est))
+            for est in established_norm
+        ):
             v.evidentiary_impact = EvidentiaryImpact.NONE
 
     report = ResolutionReport(

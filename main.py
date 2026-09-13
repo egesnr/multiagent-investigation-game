@@ -4,7 +4,7 @@ CLI orchestration for the multi-agent investigation game.
 
 import json
 
-from models import CaseFile, ClaimNoveltyStatus, GameState
+from models import CaseFile, ClaimNoveltyStatus, GameState, demeanor_trend
 from game_logic import (
     case_decisively_resolved,
     dedupe_results,
@@ -170,6 +170,12 @@ def run_turn(
         transcript=state.transcript,
     )
 
+    # Demeanor is read fresh each turn from this answer alone (Rule 7 in the
+    # extractor prompt); any trend across turns is derived in code from this
+    # history, never re-asked of an LLM (see models.demeanor_trend).
+    state.demeanor_history.append(extracted.demeanor.value)
+    state.last_demeanor_cue = extracted.demeanor_cue or None
+
     # Safety net: exact-text duplicates must never reach the Checker regardless
     # of what novelty status the model assigned. This does not replace Rule 3
     # (semantic restatement detection still relies on the model), it only
@@ -273,6 +279,8 @@ def run_turn(
         f"PLAYER ANSWER (RAW):\n{player_answer}\n\n"
         f"REALITY GATE:\n{json.dumps(gate.model_dump(), indent=2, ensure_ascii=False)}\n\n"
         f"ANALYZED ANSWER:\n{analysis_answer}\n\n"
+        f"DEMEANOR: {state.current_demeanor} ({state.last_demeanor_cue or 'no strong tell'}) "
+        f"| trend: {demeanor_trend(state.demeanor_history)}\n\n"
         f"EXTRACTED CLAIMS:\n"
         + _format_extracted_claims(extracted.claims)
         + f"\n\nNOVEL CLAIMS SENT TO CHECKER ({len(checkable_claims)}):\n"
@@ -318,6 +326,9 @@ def run_turn(
         case_log=state.case_log,
         remaining=max(state.max_questions - state.question_count, 0),
         last_turn_usefulness=state.last_turn_usefulness,
+        demeanor=state.current_demeanor,
+        demeanor_cue=state.last_demeanor_cue or "no strong tell",
+        trend=demeanor_trend(state.demeanor_history),
     )
     state.transcript.append({"role": "investigator", "text": line})
 
