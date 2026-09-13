@@ -84,22 +84,6 @@
       "visible_to": ["suspect", "investigator_start"]
     },
     {
-      "id": "prior_similar_incident",
-      "description": "Card issuer records show one earlier personal-meal charge from the same cardholder in March that also exceeded the daily meal cap; it was repaid in full only after the issuer flagged it, not self-reported",
-      "true_value": "true",
-      "weight": "high",
-      "certainty": "fast",
-      "visible_to": ["investigator_start"]
-    },
-    {
-      "id": "aware_of_cap_from_march",
-      "description": "The suspect was personally notified in writing by Finance about the meal cap and reporting policy when the March incident was resolved",
-      "true_value": "true",
-      "weight": "high",
-      "certainty": "fast",
-      "visible_to": ["suspect", "investigator_start"]
-    },
-    {
       "id": "colleague_on_trip",
       "description": "A colleague who traveled on the same trip, Ravi Chen, gave a brief preliminary statement that he had his own separate dinner alone that night and did not see or dine with the suspect",
       "true_value": "true",
