@@ -469,7 +469,7 @@ class GameState(BaseModel):
     score: int = 0
     tier: int = 1
     question_count: int = 0
-    max_questions: int = 7
+    max_questions: int = 8
 
     scored_findings: list[str] = Field(default_factory=list)
     last_turn_delta: int = 0
