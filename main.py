@@ -4,13 +4,30 @@ CLI orchestration for the multi-agent investigation game.
 
 import json
 
-from models import CaseFile, ClaimNoveltyStatus, GameState, demeanor_trend
+from models import (
+    CaseFile,
+    CheckResult,
+    ClaimNoveltyStatus,
+    ClaimStatus,
+    ClaimType,
+    FindingBasis,
+    GameState,
+    RiskProfile,
+    demeanor_trend,
+)
 from game_logic import (
     case_decisively_resolved,
     dedupe_results,
     process_turn_scoring,
 )
-from agents import run_checker, run_extractor, run_reality_gate, run_speaker, run_strategist
+from agents import (
+    run_checker,
+    run_extractor,
+    run_narrative_synthesis,
+    run_reality_gate,
+    run_speaker,
+    run_strategist,
+)
 from resolution import format_resolution, run_resolution
 
 
@@ -176,6 +193,20 @@ def run_turn(
     state.demeanor_history.append(extracted.demeanor.value)
     state.last_demeanor_cue = extracted.demeanor_cue or None
 
+    # Hold the suspect's account as one story, separate from the atomic
+    # claims list below. This is what catches a suspect contradicting their
+    # OWN earlier words (walked-back denials, a detail that quietly changed)
+    # and what notices the investigator itself circling the same topic
+    # without progress — neither of which the per-claim Checker pipeline can
+    # see, since it only ever compares one claim at a time against facts.
+    narrative = run_narrative_synthesis(state)
+    state.narrative = narrative
+
+    if narrative.stale_thread:
+        stale_note = narrative.stale_thread.strip()
+        if stale_note and stale_note not in state.case_log.exhausted_targets:
+            state.case_log.exhausted_targets.append(stale_note)
+
     # Safety net: exact-text duplicates must never reach the Checker regardless
     # of what novelty status the model assigned. This does not replace Rule 3
     # (semantic restatement detection still relies on the model), it only
@@ -233,6 +264,31 @@ def run_turn(
         ambiguous_map=ambiguous_map,
         defense_map=defense_map,
     )
+
+    # Self-contradictions are a different kind of finding from everything the
+    # Checker produces: the narrative synthesis already did the verification
+    # (it compared two of the suspect's own statements directly against the
+    # transcript), so this is NOT sent through the Checker to be re-verified
+    # against evidence — that would mean asking "is it true that the suspect
+    # contradicted themselves" as if it were still an open question. Built
+    # directly instead, with basis/status/claim_type forced by construction
+    # rather than re-guessed.
+    for contradiction in narrative.self_contradictions:
+        results.append(CheckResult(
+            quoted_evidence=contradiction.claim_text,
+            rationale=(
+                f"Earlier: \"{contradiction.earlier_statement}\" — "
+                f"Later: \"{contradiction.later_statement}\""
+            ),
+            basis=FindingBasis.STORY_HISTORY,
+            investigator_visible=True,
+            claim_type=ClaimType.CONTRADICTION,
+            verification_status=ClaimStatus.CONTRADICTED,
+            strategic_value="high",
+            evidentiary_impact=contradiction.evidentiary_impact,
+            risk_profile=RiskProfile(story_contradiction=True),
+        ))
+
     results = dedupe_results(results)
 
     turn_delta, state = process_turn_scoring(results, state, player_answer)
@@ -281,6 +337,14 @@ def run_turn(
         f"ANALYZED ANSWER:\n{analysis_answer}\n\n"
         f"DEMEANOR: {state.current_demeanor} ({state.last_demeanor_cue or 'no strong tell'}) "
         f"| trend: {demeanor_trend(state.demeanor_history)}\n\n"
+        f"SUSPECT NARRATIVE:\n{narrative.summary}\n"
+        f"SELF-CONTRADICTIONS FOUND THIS TURN:\n"
+        + ("\n".join(
+            f"- {c.claim_text} [impact={c.evidentiary_impact.value}]\n"
+            f"  earlier: \"{c.earlier_statement}\"\n  later: \"{c.later_statement}\""
+            for c in narrative.self_contradictions
+          ) or "- None")
+        + f"\nSTALE THREAD: {narrative.stale_thread or 'None'}\n\n"
         f"EXTRACTED CLAIMS:\n"
         + _format_extracted_claims(extracted.claims)
         + f"\n\nNOVEL CLAIMS SENT TO CHECKER ({len(checkable_claims)}):\n"
@@ -329,6 +393,7 @@ def run_turn(
         demeanor=state.current_demeanor,
         demeanor_cue=state.last_demeanor_cue or "no strong tell",
         trend=demeanor_trend(state.demeanor_history),
+        narrative_summary=narrative.summary,
     )
     state.transcript.append({"role": "investigator", "text": line})
 

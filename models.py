@@ -270,6 +270,62 @@ class ExtractedClaims(BaseModel):
     )
 
 
+class SelfContradiction(BaseModel):
+    """A tension between two of the SUSPECT'S OWN statements, found by reading
+    the whole account as one story — not a claim checked against an authored
+    fact. This is the thing atomic claim-by-claim checking structurally
+    cannot find on its own: it requires holding two things said in different
+    turns in mind at once and noticing they don't sit together."""
+
+    claim_text: str = Field(
+        description="A single, self-contained statement of the tension for "
+        "the case log and the investigator, e.g. 'The suspect's account of "
+        "noticing the alert is internally inconsistent: they first denied "
+        "seeing it, then said they saw it but dismissed it.'"
+    )
+    earlier_statement: str = Field(description="The earlier statement, quoted or closely paraphrased.")
+    later_statement: str = Field(description="The later statement that sits badly against it.")
+    evidentiary_impact: EvidentiaryImpact = Field(
+        description="How damaging THIS specific self-contradiction is to the "
+        "suspect's credibility, same rubric as evidentiary impact elsewhere: "
+        "weak (minor/peripheral wording drift), moderate (a real walk-back "
+        "on a supporting detail), strong (contradicts something central to "
+        "their own stated defense), decisive (guts their entire account of "
+        "what happened). Pick the lowest level the tension actually supports "
+        "— do not round up because it feels notable."
+    )
+
+
+class SuspectNarrative(BaseModel):
+    """The suspect's account held as ONE evolving story, updated each turn.
+    This is deliberately separate from the atomic claims list: the claims
+    list exists to check individual propositions against facts/policy, and
+    decomposing the answer into atoms for that purpose throws away the
+    connective tissue between turns. This model is where that connective
+    tissue lives instead."""
+
+    summary: str = Field(
+        description="3-5 sentences: the suspect's account of what happened, "
+        "as they have told it SO FAR across the whole interview, in their "
+        "own logic — not whether the investigator believes it."
+    )
+    self_contradictions: list[SelfContradiction] = Field(
+        default_factory=list,
+        description="Only genuinely new tensions surfaced by THIS turn's "
+        "answer against something said earlier. Do not re-list a tension "
+        "already identified in a previous turn.",
+    )
+    stale_thread: Optional[str] = Field(
+        default=None,
+        description="Set only if the investigator's last 3+ questions have "
+        "circled the same underlying point without the suspect adding "
+        "anything genuinely new, even if worded differently each time. "
+        "Name the specific topic in a few words (e.g. 'whether the suspect "
+        "saw the transaction alert'). Leave null otherwise — this is not "
+        "for a thread that is still producing movement."
+    )
+
+
 class LeadStatus(str, Enum):
     OPEN = "open"
     PENDING_VERIFICATION = "pending_verification"
@@ -418,6 +474,13 @@ class GameState(BaseModel):
     # Cooperate" policy instead of being scoring-neutral, which previously
     # made silence the dominant strategy over even a caught liar.
     consecutive_stonewall: int = 0
+
+    # The suspect's account held as one evolving story (see SuspectNarrative).
+    # Updated every turn from the full transcript, not the atomic claims
+    # list — this is what lets the investigator notice its own story-vs-story
+    # contradictions and its own topic tunnel-vision, neither of which the
+    # per-claim Checker pipeline can see by construction.
+    narrative: Optional[SuspectNarrative] = None
 
     @property
     def current_demeanor(self) -> str:

@@ -35,6 +35,7 @@ from models import (
     RealityGateResult,
     StrategistMove,
     EvidenceRelation,
+    SuspectNarrative,
     demeanor_trend,
     format_facts,
 )
@@ -219,6 +220,77 @@ def run_extractor(
         "answer": answer,
         "known_claims": known_claims or ["- None yet"],
         "transcript": (transcript or [])[-8:],
+    })
+
+
+narrative_prompt = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        """You hold the suspect's account together as ONE story across the
+whole interview. This is different from checking individual claims: you are
+not asked whether anything is true, only whether the suspect's own words
+still add up against their OWN earlier words.
+
+TASK 1 — SUMMARY:
+Update the running summary of what the suspect has told you so far, in their
+own logic, folding in anything new from the latest turn.
+
+TASK 2 — SELF-CONTRADICTIONS:
+Compare the suspect's LATEST answer against everything they said in EARLIER
+turns (not against outside facts — that is the Checker's job, not yours).
+Flag it only when two of the suspect's own statements are in real tension:
+a walked-back denial, a detail that quietly changed, a claim that only made
+sense given something they have since taken back. Do not flag:
+- a claim merely being unverified or unprovable,
+- a claim that was already flagged as a self-contradiction in a previous
+  turn (check PREVIOUSLY IDENTIFIED CONTRADICTIONS below),
+- ordinary elaboration or added detail that does not conflict with anything
+  said before.
+If the latest answer raises no new tension against the suspect's own prior
+words, return an empty list. Do not manufacture one to have something to say.
+For each one you do flag, rate evidentiary_impact using the rubric on that
+field — most self-contradictions are weak or moderate; reserve strong/
+decisive for a reversal that guts something central to the suspect's own
+stated defense.
+
+TASK 3 — STALE THREAD:
+Look at the last 3+ turns on the same underlying point. The test is NOT
+"is it the same topic" — staying on one topic while it keeps cracking open is
+exactly what a good interrogation does and must NOT be flagged. The test is
+whether the suspect's answer this turn repeated, dodged, or minimally
+reworded their PREVIOUS answer on that same point WITHOUT adding a new
+admission, a new detail, or a new self-contradiction. Only flag stale_thread
+when the last 3+ turns on that point produced nothing new each time — a flat
+non-answer, "I already told you," or the same claim restated. If the suspect's
+account of that same point moved AT ALL turn to turn (even a small new
+detail, even a walk-back), that thread is working, not stale — leave
+stale_thread null even after many turns on it.
+
+PREVIOUSLY IDENTIFIED CONTRADICTIONS (do not repeat these):
+{prior_contradictions}
+
+FULL TRANSCRIPT SO FAR:
+{transcript}"""
+    ),
+    (
+        "human",
+        "Previous running summary (empty if this is turn 1):\n{prior_summary}\n\n"
+        "Latest suspect answer just given:\n{latest_answer}"
+    ),
+])
+
+
+def run_narrative_synthesis(state: GameState) -> SuspectNarrative:
+    prior = state.narrative
+    chain = narrative_prompt | get_llm(0).with_structured_output(SuspectNarrative)
+    return chain.invoke({
+        "prior_contradictions": (
+            "\n".join(f"- {c.claim_text}" for c in prior.self_contradictions)
+            if prior and prior.self_contradictions else "- None yet"
+        ),
+        "transcript": state.transcript,
+        "prior_summary": prior.summary if prior else "",
+        "latest_answer": state.transcript[-1]["text"] if state.transcript else "",
     })
 
 
@@ -632,7 +704,9 @@ class EvidenceView(BaseModel):
         description="The single unresolved point that further QUESTIONING "
         "right now could still move. Never suggest fetching a document, "
         "calling a witness, or checking a record — that is what leads/"
-        "parked_threads are for, not something this turn's tactic can do."
+        "parked_threads are for, not something this turn's tactic can do. "
+        "Never pick a topic listed in exhausted_targets — it is dead, find "
+        "a different unresolved point even if it is less obviously juicy."
     )
 
 
@@ -647,7 +721,9 @@ class SkepticView(BaseModel):
     diversion_risk: str
     push_now: str = Field(
         description="The single most aggressive in-room move to make next "
-        "turn — a question or confrontation, not an outside check."
+        "turn — a question or confrontation, not an outside check. Never "
+        "target a topic listed in exhausted_targets, even by rephrasing it — "
+        "that thread is dead; find fresh ground."
     )
 
 
@@ -656,7 +732,8 @@ class AlternativeView(BaseModel):
     fairness_risk: str
     caution_move: str = Field(
         description="The single in-room move that fairly tests the innocent "
-        "reading without assuming guilt — a question, not an outside check."
+        "reading without assuming guilt — a question, not an outside check. "
+        "Never target a topic listed in exhausted_targets."
     )
 
 
@@ -685,6 +762,12 @@ that is their job, not yours."""
         "human",
         """Known facts:
 {known_facts}
+
+Suspect's account so far, as ONE story:
+{narrative_summary}
+
+Topics already exhausted (do not target these again, even reworded):
+{exhausted_targets}
 
 Visible case log:
 {case_log}
@@ -727,6 +810,12 @@ disagree with a more cautious read of the same facts."""
         """Known facts:
 {known_facts}
 
+Suspect's account so far, as ONE story:
+{narrative_summary}
+
+Topics already exhausted (do not target these again, even reworded):
+{exhausted_targets}
+
 Visible case log:
 {case_log}
 
@@ -765,6 +854,12 @@ read is overreaching, say so plainly."""
         """Known facts:
 {known_facts}
 
+Suspect's account so far, as ONE story:
+{narrative_summary}
+
+Topics already exhausted (do not target these again, even reworded):
+{exhausted_targets}
+
 Visible case log:
 {case_log}
 
@@ -796,6 +891,8 @@ def _war_input(state: GameState) -> dict:
         "demeanor": state.current_demeanor,
         "demeanor_cue": state.last_demeanor_cue or "no strong tell",
         "demeanor_trend": demeanor_trend(state.demeanor_history),
+        "narrative_summary": state.narrative.summary if state.narrative else "No account given yet.",
+        "exhausted_targets": state.case_log.exhausted_targets or ["- None"],
     }
 
 
@@ -865,6 +962,13 @@ ANTI-REPETITION IS MANDATORY:
   change register entirely (silence, pivot to an independent thread, false
   sympathy to reset the suspect's guard) rather than reaching for it a third
   time.
+- exhausted_targets in the case log are CLOSED. Do not select a target that
+  is the same topic as one of them, even rephrased or narrowed to a slightly
+  different technical angle — that is exactly the trap of re-litigating the
+  same point in different words instead of moving the interview forward.
+  Pick a different open thread, or challenge the suspect's account as a
+  WHOLE using the narrative summary below instead of one more micro-detail
+  of an already-exhausted point.
 
 QUESTION-BUDGET PRESSURE:
 - When case strength is weak and few questions remain, become selective and forceful:
@@ -888,6 +992,12 @@ Demeanor trend: {demeanor_trend}
 Allowed Tactics: {allowed}
 Recent move history: {move_history}
 
+Suspect's account so far, as ONE story:
+{narrative_summary}
+
+Topics already exhausted (do not target these again, even reworded):
+{exhausted_targets}
+
 Evidence Analyst (facts only, no recommendation):
 {evidence}
 
@@ -904,6 +1014,25 @@ Recent transcript:
 {transcript}"""
     ),
 ])
+
+def _overlaps_exhausted(target: str, exhausted_targets: list[str]) -> bool:
+    """Code-side backstop for the prompt rule above: a prompt instruction can
+    be ignored on any given call, especially by a small/cheap model. Word-
+    overlap is a coarse heuristic on purpose — it only needs to catch the
+    same topic being re-targeted with different phrasing, not achieve
+    precise semantic matching."""
+    target_words = {w for w in target.lower().split() if len(w) > 3}
+    if not target_words:
+        return False
+    for exhausted in exhausted_targets:
+        exhausted_words = {w for w in exhausted.lower().split() if len(w) > 3}
+        if not exhausted_words:
+            continue
+        overlap = len(target_words & exhausted_words) / min(len(target_words), len(exhausted_words))
+        if overlap > 0.5:
+            return True
+    return False
+
 
 def run_strategist(
     state: GameState,
@@ -939,6 +1068,8 @@ def run_strategist(
         "demeanor": war_input["demeanor"],
         "demeanor_cue": war_input["demeanor_cue"],
         "demeanor_trend": war_input["demeanor_trend"],
+        "narrative_summary": war_input["narrative_summary"],
+        "exhausted_targets": war_input["exhausted_targets"],
         "allowed": strategy_moves,
         "evidence": evidence.model_dump(),
         "skeptic": skeptic.model_dump(),
@@ -949,6 +1080,18 @@ def run_strategist(
 
     if move.tactic not in strategy_moves:
         move.tactic = "open_question"
+
+    # Backstop for the "exhausted_targets are closed" rule: if the model
+    # picked a target that's really the same exhausted topic reworded, force
+    # a pivot to the whole account instead of letting the interview tunnel
+    # further into a thread that's already produced everything it's going to.
+    if _overlaps_exhausted(move.target, state.case_log.exhausted_targets):
+        move.tactic = "pivot"
+        move.target = (
+            "Move off the exhausted thread entirely — challenge the "
+            "suspect's account as a whole against itself, using the "
+            "narrative summary, rather than another angle on the same point."
+        )
 
     if return_debug:
         return move, WarRoomBundle(
@@ -993,6 +1136,14 @@ TACTIC-SPECIFIC DELIVERY:
 - false_sympathy: open with one short, genuine-sounding beat of understanding
   or common ground, then land the real question in the same breath — the
   warmth is instrumental, not a change of heart.
+- pivot (especially off an exhausted thread): this is where you prove you've
+  been listening to the WHOLE account, not just the last answer — briefly
+  characterize the suspect's story so far (using the account summary below)
+  before asking a question that challenges it as a whole, e.g. "Let's back
+  up. Your account is: X, then Y, then Z. Walk me through that again, from
+  the start" or naming directly that their story has moved since they first
+  told it. This is your one clear chance per stale thread to show the
+  suspect they're being tracked as a whole, not fact-checked line by line.
 - every other tactic: maximum 2 sentences and one focused question.
 
 HARD RULES:
@@ -1020,6 +1171,9 @@ Last turn usefulness: {last_turn_usefulness}
 Suspect demeanor this turn: {demeanor} ({demeanor_cue})
 Demeanor trend: {demeanor_trend}
 
+Suspect's account so far, as ONE story:
+{narrative_summary}
+
 Grounded Knowledge:
 {known_facts}
 
@@ -1044,6 +1198,7 @@ def run_speaker(
     demeanor: str = "composed",
     demeanor_cue: str = "no strong tell",
     trend: str = "opening move, no trend yet",
+    narrative_summary: str = "No account given yet.",
 ) -> str:
     known_facts = "\n".join(
         f"- {f.description}: {f.true_value}"
@@ -1062,6 +1217,7 @@ def run_speaker(
         "demeanor": demeanor,
         "demeanor_cue": demeanor_cue,
         "demeanor_trend": trend,
+        "narrative_summary": narrative_summary,
         "known_facts": known_facts,
         "case_log": case_log.investigator_view() if case_log else {},
         "transcript": transcript[-10:],
