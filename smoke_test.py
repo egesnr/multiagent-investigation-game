@@ -78,6 +78,22 @@ assert state.score == before
 assert state.last_turn_usefulness == "high_future_value"
 assert "restaurant amount-entry error" in state.case_log.parked_threads
 
+# Sustained stonewalling (empty/evasive turns, i.e. no extracted claims at
+# all) must eventually cost points under the Duty to Cooperate policy —
+# otherwise pure non-cooperation is a free pass with zero downside.
+stonewall_state = GameState(case=case)
+before = stonewall_state.score
+for _ in range(2):
+    delta, stonewall_state = process_turn_scoring([], stonewall_state)
+    assert delta == 0, "no penalty before the streak threshold is reached"
+delta, stonewall_state = process_turn_scoring([], stonewall_state)
+assert delta == 12, f"expected the obstruction penalty on turn 3, got {delta}"
+assert stonewall_state.score == before + 12
+assert stonewall_state.consecutive_stonewall == 3
+assert stonewall_state.case_log.credibility_flags, (
+    "obstruction penalty should surface as a visible case_log flag"
+)
+
 # --- agents._merge_checker_results: force-derived fields never drift ---
 # investigator_visible is always True (no LLM-controlled field for it exists
 # on EvidenceAssessment at all anymore).

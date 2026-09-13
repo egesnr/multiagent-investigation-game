@@ -845,6 +845,10 @@ REACT TO THE PERSON, NOT JUST THE TRANSCRIPT:
   immediately filling it with the next question.
 - False sympathy is a real tactic: a brief show of understanding can lower a
   defensive suspect's guard right before the real question lands.
+- If the case log's credibility_flags show a Duty to Cooperate note (repeated
+  non-substantive answers to a specific question), stop repeating that exact
+  question — accuse or confront the pattern of refusal itself instead of the
+  underlying fact a third time.
 
 ANTI-REPETITION IS MANDATORY:
 - Read parked_threads, leads, and recent move_history.

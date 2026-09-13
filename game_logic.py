@@ -36,6 +36,16 @@ IMPACT_POINTS = {
 
 MAX_TURN_DAMAGE = 30
 
+# Points added once for every STONEWALL_STREAK_LENGTH consecutive turns with
+# no evidentiary gain and nothing substantive to check (see
+# GameState.consecutive_stonewall and the "Duty to Cooperate" policy). Without
+# this, pure non-cooperation ("no comment" every turn) was strictly better
+# for the suspect than even a liar who got partially caught, since evasion
+# was tracked (risk_profile.evasion) but never actually cost anything — most
+# refusals don't even produce an extracted claim for that flag to attach to.
+STONEWALL_STREAK_LENGTH = 3
+STONEWALL_PENALTY = 12
+
 
 def apply_tier(score: int) -> int:
     for lo, hi, tier in TIER_TABLE:
@@ -226,9 +236,37 @@ def process_turn_scoring(
     state = update_case_log(results, state)
 
     final_delta = min(raw_delta, MAX_TURN_DAMAGE)
+    usefulness = _turn_usefulness(results, final_delta)
+
+    # Track sustained non-cooperation. A single evasive or empty turn is
+    # normal interview friction, not conduct; a run of them under the
+    # "Duty to Cooperate" policy is itself an adverse signal.
+    if usefulness in {"no_useful_answer", "evasion_no_gain"}:
+        state.consecutive_stonewall += 1
+    else:
+        state.consecutive_stonewall = 0
+
+    obstruction_penalty = 0
+    if (
+        state.consecutive_stonewall > 0
+        and state.consecutive_stonewall % STONEWALL_STREAK_LENGTH == 0
+    ):
+        obstruction_penalty = STONEWALL_PENALTY
+        final_delta += obstruction_penalty
+        # Surface it in the shared case log (not just the score number) so
+        # War Room/Speaker/Resolution can actually reference the pattern
+        # instead of only feeling its numeric effect.
+        note = (
+            f"Suspect gave {state.consecutive_stonewall} consecutive "
+            "non-substantive answers to specific, repeated questions "
+            "(Duty to Cooperate)."
+        )
+        if note not in state.case_log.credibility_flags:
+            state.case_log.credibility_flags.append(note)
+
     state.score += final_delta
     state.last_turn_delta = final_delta
-    state.last_turn_usefulness = _turn_usefulness(results, final_delta)
+    state.last_turn_usefulness = usefulness
     state.tier = apply_tier(state.score)
 
     print("\n--- SCORE BREAKDOWN ---")
@@ -237,6 +275,11 @@ def process_turn_scoring(
             print(f"  • {item}")
     else:
         print("  • No new established incriminating evidence (+0)")
+    if obstruction_penalty:
+        print(
+            f"  • {state.consecutive_stonewall} consecutive turns of "
+            f"non-cooperation -> Duty to Cooperate breach (+{obstruction_penalty})"
+        )
 
     print(
         f"  Total Turn Delta: +{final_delta} | New Score: {state.score}"

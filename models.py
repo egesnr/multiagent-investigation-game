@@ -411,6 +411,14 @@ class GameState(BaseModel):
     demeanor_history: list[str] = Field(default_factory=list)
     last_demeanor_cue: Optional[str] = None
 
+    # Consecutive turns with no evidentiary gain and no substantive content
+    # (a pure refusal/non-answer, or an answer flagged as evasion with
+    # nothing to check). See game_logic.process_turn_scoring: this is what
+    # lets sustained non-cooperation carry a real cost under the "Duty to
+    # Cooperate" policy instead of being scoring-neutral, which previously
+    # made silence the dominant strategy over even a caught liar.
+    consecutive_stonewall: int = 0
+
     @property
     def current_demeanor(self) -> str:
         return self.demeanor_history[-1] if self.demeanor_history else "composed"
