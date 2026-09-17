@@ -153,6 +153,17 @@ defenses still belong in claims so they can be verified.
 Statements with no factual content at all (pure opinion, denial of intent framed
 as character, emotional appeals) go in new_defenses instead of claims.
 
+RULE 4b — CONDUCT IN THE ROOM IS ITSELF A FACT:
+How the suspect behaves toward the investigator is not rhetoric to be
+discarded — it is something that observably happened, in the transcript, and
+policy may bear on it. If the suspect directs abuse, threats, insults or
+personal attacks at the investigator, extract that as its own claim, stated
+plainly and without repeating the slur ("the suspect directed personal abuse
+at the investigator when asked about the transaction"), with checkable=true.
+This is narrow: ordinary anger, frustration, or a blunt refusal to answer is
+NOT abuse and must not be extracted this way. Only genuine hostility directed
+at the investigator personally.
+
 RULE 5 — LITERAL ATTRIBUTION UNDER AMBIGUITY:
 If a claim's agent, referent, or meaning could reasonably be read more than one
 way from the suspect's actual words, do not resolve it by choosing the more
