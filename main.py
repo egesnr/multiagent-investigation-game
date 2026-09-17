@@ -371,7 +371,7 @@ def run_turn(
         f"remaining={state.max_questions - state.question_count}"
     )
 
-    line = run_speaker(
+    line, speaker_grounding = run_speaker(
         state.case,
         move,
         state.transcript,
@@ -380,12 +380,20 @@ def run_turn(
         remaining=max(state.max_questions - state.question_count, 0),
         last_turn_usefulness=state.last_turn_usefulness,
         narrative_summary=narrative.summary,
+        return_debug=True,
     )
     state.transcript.append({"role": "investigator", "text": line})
 
     _append_debug_log(
-        f"SPEAKER OUTPUT AFTER TURN {state.question_count}:\n{line}\n"
-        + "=" * 60
+        f"SPEAKER OUTPUT AFTER TURN {state.question_count}:\n{line}\n\n"
+        # Kept in the log so fabrications stay auditable after the fact: every
+        # specific claim the line makes should appear here with a real source.
+        # Anything asserted in the line but missing from this list is the
+        # Speaker inventing something.
+        f"SPEAKER GROUNDING (claim -> source):\n"
+        + ("\n".join(f"- {g}" for g in speaker_grounding)
+           or "- None (line asserts nothing specific)")
+        + "\n" + "=" * 60
     )
 
     return state, line

@@ -374,6 +374,39 @@ class RealityGateResult(BaseModel):
         return any(not action.allowed for action in self.actions)
 
 
+class SpeakerLine(BaseModel):
+    """What the investigator actually says, plus the sources behind it.
+
+    `grounding` is declared FIRST on purpose, same trick as case_review on
+    StrategistMove: structured output is generated in schema order, so the
+    model must name a source for each specific claim BEFORE it writes the
+    sentence containing it. Enumerating forbidden categories in the prompt
+    kept failing — every time one category was closed (inventing documents,
+    then inventing what the suspect saw, then inventing how card systems
+    work) the next invention simply appeared in a category nobody had listed
+    yet. Requiring a source for every specific claim closes all of them at
+    once, including the ones nobody has thought of.
+    """
+
+    grounding: list[str] = Field(
+        default_factory=list,
+        description="Every specific factual claim about THIS case that your "
+        "line will state or imply, each paired with where it came from, "
+        "written as 'claim — source'. A source is one of: a known fact you "
+        "were given, an entry in the visible case log, or the suspect's own "
+        "words in the transcript (quote the phrase). If you cannot name a "
+        "real source for something, you may not say it — either drop it, or "
+        "rewrite it as a general statement about how things usually work "
+        "('receipts are normally handed over' rather than 'you were handed a "
+        "receipt'). An empty list is correct for a line that asserts nothing "
+        "specific, such as a pure question, demand, or challenge.",
+    )
+    line: str = Field(
+        description="The words you actually say to the suspect. Every "
+        "specific claim it makes must appear in grounding above."
+    )
+
+
 class StrategistMove(BaseModel):
     # case_review is declared FIRST on purpose: structured output is generated
     # field by field in schema order, so this forces the model to actually

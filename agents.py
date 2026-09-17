@@ -34,6 +34,7 @@ from models import (
     FutureVerificationValue,
     GameState,
     RealityGateResult,
+    SpeakerLine,
     StrategistMove,
     EvidenceRelation,
     SuspectNarrative,
@@ -1045,16 +1046,41 @@ VARY YOUR RHYTHM — this is what separates a person from a form:
 - Look at your own last two lines in the dialogue below. Do not open the same
   way twice, and do not reuse a phrase you already used.
 
-HARD RULES:
+THE ONE RULE THAT MATTERS MOST — GENERAL VS. SPECIFIC:
+You may reason out loud about how the world generally works: how card terminals,
+receipts, bank alerts, expense systems or restaurants normally operate. That is
+legitimate pressure and you should use it freely.
+
+What you may never do is turn that into a specific claim about THIS case. The
+test is grammatical, and it is absolute:
+
+  ALLOWED  "A terminal normally shows the total before you confirm."
+  BANNED   "The terminal showed you the total."
+  ALLOWED  "Restaurants hand over a receipt as a matter of course."
+  BANNED   "You were handed a receipt and had it in your hand."
+  ALLOWED  "Cards like this normally flag charges far smaller than this one."
+  BANNED   "Your card's fraud alerts trigger at five hundred dollars."
+
+If you were not told that something happened here — by the suspect's own words
+in the transcript, or by your known facts — then you may only say that it
+usually happens, never that it did happen. This applies to anything that merely
+sounds like common knowledge about how companies, banks, restaurants or card
+systems work: sounding obviously true is not the same as being established, and
+this case may not work the way you assume.
+
+Said the allowed way it is also stronger interrogation, because it puts the
+burden back on them instead of handing them a false statement to correct.
+
+This is enforced by the grounding list you fill in before writing your line.
+For every specific claim about this case your line will make, you must name
+where it came from — a known fact, the case log, or the suspect's own words.
+Write that list first and honestly. If you find yourself unable to source
+something, that is the system working: drop the claim or soften it to a
+general statement, then write the line. Do not write the line first and
+back-fill sources for it.
+
+OTHER HARD RULES:
 - pursue the target you were given,
-- use only Grounded Knowledge, Visible Case Log, or words actually spoken,
-- NEVER invent the contents, authenticity, markings, inspection results, or condition
-  of a document/object merely because the suspect claims it exists,
-- never invent dates, people, records, CCTV, witnesses, or completed checks,
-- never assert a specific detail about what the suspect personally saw, received, or
-  was shown (an exact figure on an alert, the wording of a message, etc.) unless the
-  suspect actually said that detail — knowing the true amount from known_facts does
-  NOT mean the suspect's notification showed that amount; only claim that if they said so,
 - never expose hidden case truth,
 - pressure may refer truthfully to future checking (e.g. records can be checked),
   but never claim the check already proved something,
@@ -1107,14 +1133,15 @@ def run_speaker(
     remaining: int = 0,
     last_turn_usefulness: str = "unknown",
     narrative_summary: str = "No account given yet.",
-) -> str:
+    return_debug: bool = False,
+):
     known_facts = "\n".join(
         f"- {f.description}: {f.true_value}"
         for f in case.visible_facts("investigator_start")
     ) or "- None"
 
-    chain = speaker_prompt | get_llm(0.5)
-    response = invoke_with_retry(chain, {
+    chain = speaker_prompt | get_llm(0.5).with_structured_output(SpeakerLine)
+    spoken = invoke_with_retry(chain, {
         "persona": case.persona,
         "target": move.target,
         "score": score,
@@ -1127,10 +1154,12 @@ def run_speaker(
         "transcript": transcript[-10:],
     })
 
-    content = response.content
-    if isinstance(content, list):
-        return "".join(
-            c.get("text", "") if isinstance(c, dict) else str(c)
-            for c in content
-        ).strip()
-    return str(content).strip()
+    if spoken.grounding:
+        print("  [speaker grounding]")
+        for item in spoken.grounding:
+            print(f"    - {item}")
+
+    line = spoken.line.strip()
+    if return_debug:
+        return line, spoken.grounding
+    return line

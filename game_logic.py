@@ -34,8 +34,6 @@ IMPACT_POINTS = {
     EvidentiaryImpact.DECISIVE: 25,
 }
 
-MAX_TURN_DAMAGE = 30
-
 # Points added once for every STONEWALL_STREAK_LENGTH consecutive turns with
 # no evidentiary gain and nothing substantive to check (see
 # GameState.consecutive_stonewall and the "Duty to Cooperate" policy). Without
@@ -235,7 +233,11 @@ def process_turn_scoring(
 
     state = update_case_log(results, state)
 
-    final_delta = min(raw_delta, MAX_TURN_DAMAGE)
+    # No per-turn cap: a cap discarded legitimately earned points purely based
+    # on which turn they happened to land in, so the same suspect making the
+    # same admissions scored differently depending on whether their story fell
+    # apart all at once or piece by piece.
+    final_delta = raw_delta
     usefulness = _turn_usefulness(results, final_delta)
 
     # Track sustained non-cooperation. A single evasive or empty turn is

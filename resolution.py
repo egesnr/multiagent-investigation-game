@@ -45,7 +45,10 @@ class VerificationDraft(BaseModel):
 
 
 class NarrativeDraft(BaseModel):
-    confidence: str
+    confidence: str = Field(
+        description="How confident the finding is, as a word: high, moderate, "
+        "or low. Not a score or a number."
+    )
     reasoning: str
     aftermath: str
 
@@ -156,6 +159,10 @@ continue") is fine when the record doesn't support anything more specific."""
         """FINAL OUTCOME (fixed, do not contradict): {outcome}
 Final case score: {final_score}/{threshold}
 
+AUTHORED FACTS (the only source for any specific figure, date, name or
+document you mention — quote them exactly, never reconstruct from memory):
+{facts}
+
 VERIFICATIONS FROM THIS STAGE:
 {verifications}
 
@@ -260,6 +267,11 @@ def run_resolution(state: GameState) -> ResolutionReport:
         "outcome": outcome.value,
         "final_score": final_score,
         "threshold": state.case.arrest_threshold,
+        # The narrative stage was told to ground every specific detail in the
+        # authored facts "below" while never actually being passed them, so it
+        # reconstructed figures from surrounding context and got them wrong
+        # (reported the charge as $3,150 against an authored $3,200).
+        "facts": facts,
         "verifications": [v.model_dump() for v in verifications] or "- None",
         "already_established": already_established_text,
         "case_log": state.case_log.model_dump(),
