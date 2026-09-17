@@ -509,11 +509,23 @@ class GameState(BaseModel):
     max_questions: int = 8
 
     scored_findings: list[str] = Field(default_factory=list)
+
+    # Claim text -> provisional suspicion points awarded in the room for an
+    # unverified defense. Resolution refunds these if verification confirms
+    # the claim was true, so a suspect is never permanently punished for an
+    # excuse that turns out to be honest.
+    provisional_findings: dict[str, int] = Field(default_factory=dict)
     last_turn_delta: int = 0
     last_turn_usefulness: str = "unknown"
     last_world_notice: Optional[str] = None
     last_move: Optional[str] = None
     move_history: list[str] = Field(default_factory=list)
+
+    # One entry per turn: the sources the Speaker named for that turn's line
+    # (see SpeakerLine.grounding). Kept on the state, not just the debug log,
+    # so a saved session can be audited afterwards for claims that were
+    # asserted without a real source — including citations the model invented.
+    grounding_history: list[list[str]] = Field(default_factory=list)
 
     # Consecutive turns with no evidentiary gain and no substantive content
     # (a pure refusal/non-answer, or an answer flagged as evasion with

@@ -249,7 +249,24 @@ def run_resolution(state: GameState) -> ResolutionReport:
             v.evidentiary_impact = EvidentiaryImpact.NONE
 
     delta = _verification_delta(verifications)
-    final_score = state.score + delta
+
+    # Give back suspicion points for excuses that turned out to be true. In the
+    # room an unsupported defense raises suspicion (game_logic.PROVISIONAL_POINTS)
+    # because a liar must not profit from saying things nobody can check on the
+    # spot — but a suspect who was telling the truth all along should not be
+    # left carrying that penalty once verification confirms them.
+    refund = 0
+    for v in verifications:
+        if v.status != VerificationStatus.CONFIRMED:
+            continue
+        v_norm = _normalize(v.claim)
+        for claim_text, points in state.provisional_findings.items():
+            c_norm = _normalize(claim_text)
+            if v_norm == c_norm or (len(c_norm) > 20 and (c_norm in v_norm or v_norm in c_norm)):
+                refund += points
+                break
+
+    final_score = state.score + delta - refund
 
     # Keep the numeric KPI and ending parallel: CAUGHT requires the threshold.
     # This is decided BEFORE the narrative is written, not after, so the

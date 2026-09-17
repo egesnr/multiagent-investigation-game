@@ -382,6 +382,7 @@ def run_turn(
         narrative_summary=narrative.summary,
         return_debug=True,
     )
+    state.grounding_history.append(list(speaker_grounding))
     state.transcript.append({"role": "investigator", "text": line})
 
     _append_debug_log(
