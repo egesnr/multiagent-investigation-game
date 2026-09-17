@@ -1,0 +1,259 @@
+<!doctype html>
+<title>Dactilo Sound Picker</title>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#1c1e22;
+    --panel:#242730;
+    --panel2:#20232a;
+    --border:#383d46;
+    --text:#dde0e4;
+    --dim:#8b919b;
+    --accent:#c98a3d;
+    --accent-dim:#6b5636;
+    color-scheme: dark;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Mono', ui-monospace, monospace;
+    padding-block: 32px 60px;
+  }
+  .wrap{ max-width:720px; margin:0 auto; padding-inline:20px; display:flex; flex-direction:column; gap:26px; }
+
+  h1{
+    font-family:'Oswald', sans-serif;
+    font-weight:600;
+    font-size:1.6rem;
+    letter-spacing:0.01em;
+    margin:0 0 6px;
+    color:#f0f1f3;
+  }
+  .lede{ color:var(--dim); font-size:0.86rem; line-height:1.55; max-width:60ch; margin:0; }
+
+  h2{
+    font-family:'Oswald', sans-serif;
+    font-size:0.72rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--dim);
+    border-bottom:1px solid var(--border);
+    padding-bottom:8px;
+    margin:0 0 4px;
+  }
+
+  .list{ display:flex; flex-direction:column; gap:8px; }
+  .row{
+    display:grid;
+    grid-template-columns: 34px 1fr auto;
+    align-items:center;
+    gap:14px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:12px 14px;
+  }
+  @media (max-width:480px){
+    .row{ grid-template-columns: 28px 1fr; }
+    .row .play-btn{ grid-column: 1 / -1; }
+  }
+  .num{
+    font-family:'Oswald', sans-serif;
+    font-size:0.95rem;
+    color:var(--dim);
+    text-align:center;
+  }
+  .row .name{ font-size:0.9rem; color:var(--text); }
+  .row .desc{ font-size:0.76rem; color:var(--dim); margin-top:2px; }
+  .play-btn{
+    font-family:'Oswald', sans-serif;
+    font-size:0.68rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:9px 16px;
+    border-radius:3px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .play-btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .play-btn:active{ transform:translateY(1px); }
+  .play-btn.playing{ border-color:var(--accent); background:var(--accent-dim); color:#f0f1f3; }
+
+  .burst-note{
+    font-size:0.76rem;
+    color:var(--dim);
+    line-height:1.5;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:10px 12px;
+  }
+  .burst-note b{ color:var(--text); }
+
+  footer{
+    font-size:0.78rem;
+    color:var(--dim);
+    line-height:1.6;
+    border-top:1px solid var(--border);
+    padding-top:16px;
+  }
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>Dactilo Sound Picker</h1>
+    <p class="lede">Nine synthesized candidates for "The Box" — a key-strike sound to play per typed character, and a line-end sound for when the investigator finishes a question. Click any button to preview it (repeatable), then tell me the numbers you want, e.g. "clack 4, line-end 2."</p>
+  </div>
+
+  <div class="burst-note" id="unlockNote">Click any Play button once to enable audio in this browser tab — that's a one-time browser requirement, not part of the sound itself.</div>
+
+  <div>
+    <h2>Key strike — plays once per typed character</h2>
+    <div class="list" id="clackList"></div>
+  </div>
+
+  <div>
+    <h2>Line end — plays once when the investigator finishes a line</h2>
+    <div class="list" id="bellList"></div>
+  </div>
+
+  <footer>All nine are generated live with the Web Audio API — no sound files. Whichever you pick gets wired into the typing animation in "The Box."</footer>
+</div>
+
+<script>
+(function(){
+  var audioCtx = null;
+  function ensureAudio(){
+    if (!audioCtx){
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new Ctx();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    document.getElementById('unlockNote').style.display = 'none';
+  }
+
+  function noiseBuffer(seconds, shape){
+    var len = Math.max(1, Math.floor(audioCtx.sampleRate * seconds));
+    var buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < len; i++){
+      var env = shape ? shape(i / len) : (1 - i / len);
+      data[i] = (Math.random() * 2 - 1) * env;
+    }
+    return buffer;
+  }
+
+  function playNoiseBurst(opts){
+    var t = audioCtx.currentTime;
+    var src = audioCtx.createBufferSource();
+    src.buffer = noiseBuffer(opts.dur, opts.shape);
+    var filter = audioCtx.createBiquadFilter();
+    filter.type = opts.filterType || 'bandpass';
+    filter.frequency.value = opts.freq;
+    filter.Q.value = opts.q;
+    var gain = audioCtx.createGain();
+    gain.gain.value = opts.gain;
+    src.connect(filter).connect(gain).connect(audioCtx.destination);
+    src.start(t);
+  }
+
+  function playTone(opts){
+    var t = audioCtx.currentTime + (opts.delay || 0);
+    var osc = audioCtx.createOscillator();
+    osc.type = opts.type || 'sine';
+    osc.frequency.value = opts.freq;
+    var gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(opts.peak, t + (opts.attack || 0.006));
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + opts.decay);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + opts.decay + 0.02);
+  }
+
+  // ---------------- Key-strike candidates ----------------
+  var CLACKS = [
+    {
+      name: 'Soft tick', desc: 'very short, quiet, high-passed — a membrane keyboard key',
+      play: function(){ playNoiseBurst({ dur:0.008, freq:5200, q:2.5, gain:0.16, shape:function(p){ return Math.pow(1-p,3); } }); }
+    },
+    {
+      name: 'Sharp click', desc: 'tight bandpass burst — crisp digital key click',
+      play: function(){ playNoiseBurst({ dur:0.012, freq:4200, q:4, gain:0.3, shape:function(p){ return Math.pow(1-p,2); } }); }
+    },
+    {
+      name: 'Blunt clack', desc: 'noise burst + a single very short low pop underneath',
+      play: function(){
+        playNoiseBurst({ dur:0.01, freq:3400, q:3, gain:0.26, shape:function(p){ return Math.pow(1-p,2); } });
+        playTone({ type:'sine', freq:220, peak:0.1, attack:0.001, decay:0.02 });
+      }
+    },
+    {
+      name: 'Double-tap', desc: 'two quick bursts — strike, then a faint rebound',
+      play: function(){
+        playNoiseBurst({ dur:0.009, freq:4000, q:4, gain:0.28, shape:function(p){ return Math.pow(1-p,2); } });
+        setTimeout(function(){
+          playNoiseBurst({ dur:0.007, freq:4600, q:4, gain:0.12, shape:function(p){ return Math.pow(1-p,2); } });
+        }, 14);
+      }
+    },
+    {
+      name: 'Mechanical thunk', desc: 'lower, heavier, slightly longer — a real type-bar hit',
+      play: function(){ playNoiseBurst({ dur:0.02, freq:1800, q:2, gain:0.3, shape:function(p){ return Math.pow(1-p,1.5); } }); }
+    },
+    {
+      name: 'Retro beep', desc: 'not noise at all — a 2ms square-wave blip, arcade-keyboard feel',
+      play: function(){ playTone({ type:'square', freq:1800, peak:0.08, attack:0.001, decay:0.012 }); }
+    }
+  ];
+
+  // ---------------- Line-end candidates ----------------
+  var BELLS = [
+    {
+      name: 'Classic ding', desc: 'the typewriter carriage-return bell — a ringing sine',
+      play: function(){ playTone({ type:'sine', freq:2450, peak:0.22, attack:0.008, decay:0.6 }); }
+    },
+    {
+      name: 'Soft double chime', desc: 'two quick gentle notes, less "alarm" than a single ding',
+      play: function(){
+        playTone({ type:'sine', freq:1760, peak:0.14, attack:0.006, decay:0.16 });
+        playTone({ type:'sine', freq:2093, peak:0.14, attack:0.006, decay:0.28, delay:0.09 });
+      }
+    },
+    {
+      name: 'Low blip', desc: 'barely-there acknowledgement tone, no bell character at all',
+      play: function(){ playTone({ type:'triangle', freq:520, peak:0.12, attack:0.004, decay:0.14 }); }
+    }
+  ];
+
+  function buildList(containerId, items, prefix){
+    var container = document.getElementById(containerId);
+    items.forEach(function(item, i){
+      var row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML =
+        '<span class="num">' + (i + 1) + '</span>' +
+        '<div><div class="name">' + item.name + '</div><div class="desc">' + item.desc + '</div></div>' +
+        '<button class="play-btn">Play</button>';
+      var btn = row.querySelector('.play-btn');
+      btn.addEventListener('click', function(){
+        ensureAudio();
+        item.play();
+        btn.classList.add('playing');
+        setTimeout(function(){ btn.classList.remove('playing'); }, 220);
+      });
+      container.appendChild(row);
+    });
+  }
+
+  buildList('clackList', CLACKS, 'clack');
+  buildList('bellList', BELLS, 'bell');
+})();
+</script>
