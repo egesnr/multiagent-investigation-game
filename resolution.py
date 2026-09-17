@@ -20,6 +20,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
+from llm_utils import invoke_with_retry
 from models import (
     ClaimStatus,
     EvidentiaryImpact,
@@ -204,7 +205,7 @@ def run_resolution(state: GameState) -> ResolutionReport:
     verification_chain = (
         verification_prompt | get_llm(0.2).with_structured_output(VerificationDraft)
     )
-    verification_draft = verification_chain.invoke({
+    verification_draft = invoke_with_retry(verification_chain, {
         "facts": facts,
         "policy": policy,
         "already_established": already_established_text,
@@ -255,7 +256,7 @@ def run_resolution(state: GameState) -> ResolutionReport:
         outcome = verification_draft.outcome_recommendation
 
     narrative_chain = narrative_prompt | get_llm(0.3).with_structured_output(NarrativeDraft)
-    narrative = narrative_chain.invoke({
+    narrative = invoke_with_retry(narrative_chain, {
         "outcome": outcome.value,
         "final_score": final_score,
         "threshold": state.case.arrest_threshold,

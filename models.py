@@ -23,20 +23,6 @@ class Weight(str, Enum):
     HIGH = "high"
 
 
-class SuspectDemeanor(str, Enum):
-    """How the suspect is coming across in their CURRENT answer only — a
-    behavioral read, not an evidentiary one. Read fresh each turn (see
-    ExtractedClaims.demeanor); any trend across turns is derived in code from
-    the stored history, never re-asked of an LLM."""
-
-    COMPOSED = "composed"
-    COOPERATIVE = "cooperative"
-    DEFENSIVE = "defensive"
-    EVASIVE = "evasive"
-    AGGRESSIVE = "aggressive"
-    PANICKED = "panicked"
-
-
 class Fact(BaseModel):
     id: str
     description: str
@@ -256,18 +242,6 @@ class ExtractedClaimItem(BaseModel):
 class ExtractedClaims(BaseModel):
     claims: list[ExtractedClaimItem] = Field(default_factory=list)
     new_defenses: list[str] = Field(default_factory=list)
-    demeanor: SuspectDemeanor = Field(
-        default=SuspectDemeanor.COMPOSED,
-        description="Read only from THIS answer's tone and behavior, not the "
-        "conversation as a whole and not the factual content of the claims.",
-    )
-    demeanor_cue: str = Field(
-        default="",
-        description="One short phrase pointing at the specific tell that "
-        "justifies the demeanor call (e.g. 'raised voice, challenged my "
-        "authority to ask' or 'long hedge before answering, then over-"
-        "explained'). Empty only if the answer is too short to show any tell.",
-    )
 
 
 class SelfContradiction(BaseModel):
@@ -403,7 +377,7 @@ class RealityGateResult(BaseModel):
 class StrategistMove(BaseModel):
     # case_review is declared FIRST on purpose: structured output is generated
     # field by field in schema order, so this forces the model to actually
-    # reason in prose about the whole case BEFORE it commits to target/tactic,
+    # reason in prose about the whole case BEFORE it commits to a target,
     # instead of picking a target first and writing a justification for it
     # afterward. See agents.strategist_prompt for what this must cover.
     case_review: str = Field(
@@ -419,8 +393,38 @@ class StrategistMove(BaseModel):
         "outside check as existing or confirmed unless it is literally there. "
         "If something is unconfirmed, say it is unconfirmed."
     )
-    target: str = Field(description="Free-form investigation thread to pursue next")
-    tactic: str = Field(description="Allowed interview tactic")
+    repetition_check: str = Field(
+        description="Before naming a target: restate, in plain terms, what "
+        "EVERY move in move_history below was actually asking — all of "
+        "them, not just the most recent one or two — the underlying "
+        "question, not the exact wording. Then check whether the target "
+        "you are about to pick is asking any ONE of those same underlying "
+        "questions again in different clothes, even if it was several "
+        "turns ago. Judge this by meaning, not matching words: 'did you see "
+        "the alert' and 'how did $320 become $3,200' are the same question "
+        "if both are really just asking whether the suspect noticed and "
+        "ignored the discrepancy, even though they share almost no words — "
+        "and a question from turn 1 is exactly as repeated as one from last "
+        "turn if you're asking it again now. If your planned target "
+        "repeats ANY earlier move by meaning, say so here and pick a "
+        "genuinely different thread instead — a different fact, a "
+        "different policy angle, or the account as a whole — never proceed "
+        "with a same-meaning target just because the phrasing changed or "
+        "because it's been a few turns. If it is genuinely new, say "
+        "briefly what makes it different from every prior move, not just "
+        "the most recent one."
+    )
+    target: str = Field(
+        description="Free-form investigation thread to pursue next. Same "
+        "grounding rule as case_review applies here: any specific detail "
+        "you reference — a number, a document, what the suspect supposedly "
+        "saw, received, or was shown — must be something the suspect "
+        "actually said or a fact from known_facts/case log. Do not invent "
+        "a specific because it seems like a likely inference (e.g. do not "
+        "assert the suspect saw an alert showing a particular dollar "
+        "amount just because you know that amount — only state that if the "
+        "suspect actually said so)."
+    )
     rationale: str = Field(
         description="Internal strategy rationale. Must name which War Room "
         "voice's read (Skeptic's push_now vs. Alternative's caution_move) "
@@ -478,13 +482,6 @@ class GameState(BaseModel):
     last_move: Optional[str] = None
     move_history: list[str] = Field(default_factory=list)
 
-    # One SuspectDemeanor value per turn, read fresh from that turn's answer
-    # only (see ExtractedClaims.demeanor). current_demeanor and the trend are
-    # both derived from this list in code — never stored separately, so
-    # there is nothing here for two code paths to disagree about.
-    demeanor_history: list[str] = Field(default_factory=list)
-    last_demeanor_cue: Optional[str] = None
-
     # Consecutive turns with no evidentiary gain and no substantive content
     # (a pure refusal/non-answer, or an answer flagged as evasion with
     # nothing to check). See game_logic.process_turn_scoring: this is what
@@ -499,26 +496,3 @@ class GameState(BaseModel):
     # contradictions and its own topic tunnel-vision, neither of which the
     # per-claim Checker pipeline can see by construction.
     narrative: Optional[SuspectNarrative] = None
-
-    @property
-    def current_demeanor(self) -> str:
-        return self.demeanor_history[-1] if self.demeanor_history else "composed"
-
-
-_ESCALATED_DEMEANORS = {"aggressive", "panicked"}
-_CALM_DEMEANORS = {"composed", "cooperative"}
-
-
-def demeanor_trend(history: list[str]) -> str:
-    """Pure code derivation from stored per-turn demeanor reads — the LLM is
-    never asked to judge the trend itself, only each turn's raw demeanor."""
-    if len(history) < 2:
-        return "opening move, no trend yet"
-    current, previous = history[-1], history[-2]
-    if current == previous:
-        return f"holding steady at {current}"
-    if current in _ESCALATED_DEMEANORS and previous not in _ESCALATED_DEMEANORS:
-        return f"escalating toward {current}"
-    if current in _CALM_DEMEANORS and previous not in _CALM_DEMEANORS:
-        return f"cooling from {previous} to {current}"
-    return f"shifting from {previous} to {current}"

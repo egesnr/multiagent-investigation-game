@@ -19,6 +19,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
+from llm_utils import invoke_with_retry
 from models import (
     CaseFile,
     CheckResult,
@@ -36,7 +37,6 @@ from models import (
     StrategistMove,
     EvidenceRelation,
     SuspectNarrative,
-    demeanor_trend,
     format_facts,
 )
 
@@ -93,7 +93,7 @@ Recent transcript: {transcript}"""
 
 def run_reality_gate(state: GameState, answer: str) -> RealityGateResult:
     chain = reality_gate_prompt | get_llm(0).with_structured_output(RealityGateResult)
-    return chain.invoke({
+    return invoke_with_retry(chain, {
         "present_people": state.case.present_people,
         "room_objects": state.case.room_objects or ["none authored"],
         "known_facts": _known_facts(state),
@@ -178,24 +178,6 @@ RULE 6 — SUSPECT-ONLY GROUNDING:
   known_claims is for comparison/deduplication only — it is never a source of
   new claims for the current turn.
 
-RULE 7 — DEMEANOR READING:
-Separately from claim content, read how the suspect is coming across in THIS
-answer only (ignore earlier turns entirely — that history is tracked
-elsewhere). Choose exactly one:
-- composed: calm, in control, answering directly.
-- cooperative: forthcoming, volunteering detail, engaged with the process.
-- defensive: justifying, minimizing, rushing to explain rather than answer.
-- evasive: dodging, non-answers, changing the subject, answering a different
-  question than the one asked.
-- aggressive: hostile, challenging the investigator's right to ask, raised
-  tone, attacking rather than answering.
-- panicked: flustered, self-contradicting within the same answer,
-  over-explaining, visible distress.
-Base this purely on tone/behavior in the wording actually used, not on
-whether the content sounds truthful. A calm liar is still composed; an
-innocent person who is furious at being accused is still aggressive.
-Give a one-phrase demeanor_cue naming the specific tell, or leave it empty
-only if the answer is too short/flat to show one.
 """
     ),
     (
@@ -215,7 +197,7 @@ def run_extractor(
     transcript: list[dict] | None = None,
 ) -> ExtractedClaims:
     chain = extractor_prompt | get_llm(0).with_structured_output(ExtractedClaims)
-    return chain.invoke({
+    return invoke_with_retry(chain, {
         "question": question,
         "answer": answer,
         "known_claims": known_claims or ["- None yet"],
@@ -283,10 +265,17 @@ FULL TRANSCRIPT SO FAR:
 def run_narrative_synthesis(state: GameState) -> SuspectNarrative:
     prior = state.narrative
     chain = narrative_prompt | get_llm(0).with_structured_output(SuspectNarrative)
-    return chain.invoke({
+    return invoke_with_retry(chain, {
+        # Pull from case_log.contradictions (accumulated across the WHOLE
+        # game) rather than prior.self_contradictions (only what THIS ONE
+        # prior turn's narrative object found). state.narrative gets fully
+        # replaced every turn, so the latter has a one-turn memory: a
+        # contradiction found in turn 3 was invisible by turn 5 once turn 4
+        # found nothing new, letting a reworded version of the same tension
+        # get "discovered" and scored again as if new.
         "prior_contradictions": (
-            "\n".join(f"- {c.claim_text}" for c in prior.self_contradictions)
-            if prior and prior.self_contradictions else "- None yet"
+            "\n".join(f"- {c}" for c in state.case_log.contradictions)
+            if state.case_log.contradictions else "- None yet"
         ),
         "transcript": state.transcript,
         "prior_summary": prior.summary if prior else "",
@@ -640,7 +629,7 @@ def run_checker(
         evidence_checker_prompt
         | get_llm(0).with_structured_output(EvidenceAssessmentList)
     )
-    evidence_output = evidence_chain.invoke({
+    evidence_output = invoke_with_retry(evidence_chain, {
         "known_facts": known_facts,
         "policy": policy,
         "case_log": visible_case_log,
@@ -681,7 +670,7 @@ def run_checker(
         significance_checker_prompt
         | get_llm(0).with_structured_output(InvestigativeSignificanceList)
     )
-    significance_output = significance_chain.invoke({
+    significance_output = invoke_with_retry(significance_chain, {
         "known_facts": known_facts,
         "policy": policy,
         "case_log": visible_case_log,
@@ -697,26 +686,13 @@ def run_checker(
     )
 
 
-class EvidenceView(BaseModel):
-    established: list[str] = Field(default_factory=list)
-    unresolved: list[str] = Field(default_factory=list)
-    in_room_lever: str = Field(
-        description="The single unresolved point that further QUESTIONING "
-        "right now could still move. Never suggest fetching a document, "
-        "calling a witness, or checking a record — that is what leads/"
-        "parked_threads are for, not something this turn's tactic can do. "
-        "Never pick a topic listed in exhausted_targets — it is dead, find "
-        "a different unresolved point even if it is less obviously juicy."
-    )
-
-
 class SkepticView(BaseModel):
     strongest_pressure_point: str
     behavioral_read: str = Field(
-        description="What the suspect's demeanor and demeanor_cue this turn "
-        "actually suggest — calculated evasion, rehearsed composure, genuine "
-        "panic, etc. Ground this in the demeanor signal given, not a fresh "
-        "guess from the transcript."
+        description="What the suspect's own words this turn actually suggest "
+        "about how they're holding up — calculated evasion, rehearsed "
+        "composure, genuine panic, someone starting to crack. Read it from "
+        "how they actually phrased their answer in the transcript."
     )
     diversion_risk: str
     push_now: str = Field(
@@ -738,7 +714,6 @@ class AlternativeView(BaseModel):
 
 
 class WarRoomBundle(BaseModel):
-    evidence: EvidenceView
     skeptic: SkepticView
     alternative: AlternativeView
 
@@ -747,55 +722,16 @@ def _known_facts(state: GameState) -> str:
     return format_facts(state.case.visible_facts("investigator_start"))
 
 
-evidence_prompt = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        """You are the Evidence Analyst in an internal war room.
-Separate established information from unresolved claims.
-Do not infer hidden truth and do not invent evidence.
-Your job is bookkeeping, not persuasion: give the cleanest possible map of
-what stands and what doesn't, so the Skeptic and Alternative voices below
-can argue over what to do about it. Do not recommend a next move yourself —
-that is their job, not yours."""
-    ),
-    (
-        "human",
-        """Known facts:
-{known_facts}
-
-Suspect's account so far, as ONE story:
-{narrative_summary}
-
-Topics already exhausted (do not target these again, even reworded):
-{exhausted_targets}
-
-Visible case log:
-{case_log}
-
-Recent transcript:
-{transcript}
-
-Suspect demeanor this turn: {demeanor} ({demeanor_cue})
-Demeanor trend: {demeanor_trend}
-
-Questions remaining: {remaining}
-Current case strength: {score}/{threshold}
-Last turn: +{last_turn_delta}, usefulness={last_turn_usefulness}
-Recent strategy moves: {move_history}"""
-    ),
-])
-
-
 skeptic_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
         """You are the Skeptical Investigator in an internal war room — the
 voice arguing to press harder, right now. Find the strongest legitimate
 pressure point: established contradictions, policy admissions, material
-unsupported explanations, evasion, or diversion. Read the suspect's demeanor
-and demeanor_cue as a real signal, not decoration — a composed suspect
-sitting on a strong contradiction is stalling; a suddenly panicked one just
-got close to something.
+unsupported explanations, evasion, or diversion. Read HOW the suspect is
+answering, not just what they say — someone perfectly calm while sitting on a
+strong contradiction is stalling; someone who suddenly gets rattled or
+over-explains just got close to something.
 
 Do not assume an unresolved claim is false.
 Do not invent evidence.
@@ -821,9 +757,6 @@ Visible case log:
 
 Recent transcript:
 {transcript}
-
-Suspect demeanor this turn: {demeanor} ({demeanor_cue})
-Demeanor trend: {demeanor_trend}
 
 Questions remaining: {remaining}
 Current case strength: {score}/{threshold}
@@ -866,9 +799,6 @@ Visible case log:
 Recent transcript:
 {transcript}
 
-Suspect demeanor this turn: {demeanor} ({demeanor_cue})
-Demeanor trend: {demeanor_trend}
-
 Questions remaining: {remaining}
 Current case strength: {score}/{threshold}
 Last turn: +{last_turn_delta}, usefulness={last_turn_usefulness}
@@ -888,27 +818,19 @@ def _war_input(state: GameState) -> dict:
         "last_turn_delta": state.last_turn_delta,
         "last_turn_usefulness": state.last_turn_usefulness,
         "move_history": state.move_history[-6:],
-        "demeanor": state.current_demeanor,
-        "demeanor_cue": state.last_demeanor_cue or "no strong tell",
-        "demeanor_trend": demeanor_trend(state.demeanor_history),
         "narrative_summary": state.narrative.summary if state.narrative else "No account given yet.",
         "exhausted_targets": state.case_log.exhausted_targets or ["- None"],
     }
 
 
-def run_evidence_analyst(state: GameState) -> EvidenceView:
-    chain = evidence_prompt | get_llm(0).with_structured_output(EvidenceView)
-    return chain.invoke(_war_input(state))
-
-
 def run_skeptic(state: GameState) -> SkepticView:
     chain = skeptic_prompt | get_llm(0.2).with_structured_output(SkepticView)
-    return chain.invoke(_war_input(state))
+    return invoke_with_retry(chain, _war_input(state))
 
 
 def run_alternative_hypothesis(state: GameState) -> AlternativeView:
     chain = alternative_prompt | get_llm(0.2).with_structured_output(AlternativeView)
-    return chain.invoke(_war_input(state))
+    return invoke_with_retry(chain, _war_input(state))
 
 
 strategist_prompt = ChatPromptTemplate.from_messages([
@@ -917,7 +839,7 @@ strategist_prompt = ChatPromptTemplate.from_messages([
         """You are the Lead Investigator adjudicating your own war room.
 
 THINK BEFORE YOU ACT — case_review comes first for a reason:
-You must write case_review BEFORE target and tactic, and target must actually
+You must write case_review BEFORE your target, and the target must actually
 follow from it. Do not pick a target first and rationalize it afterward.
 In case_review, identify the suspect's real central claim or defense — the
 thing their whole story actually rests on — and check whether it has been
@@ -950,38 +872,44 @@ established if it is literally present in known_facts or the case log below.
 If you want to reason about what a future check MIGHT show, say "if
 verified, this would..." — never state it as already true.
 
-Your KPI is to build the strongest investigator-visible case possible within the
-remaining interview questions. The score is the current case-strength KPI toward
-the game's arrest threshold. Use it as urgency/performance context, but do not farm
-cheap points or assume a zero-point answer was useless.
+WHAT YOU ARE ACTUALLY DOING HERE:
+You are trying to get something out of a person who does not want to give it to
+you. That is the whole job. A clean, well-formed question that gets you nothing
+is a failure. An ugly exchange that gets you one real thing is a win.
 
-A zero-point answer can be:
-- HIGH FUTURE VALUE: a concrete commitment useful for later verification -> park it
-  and pivot to a different independent line.
-- NO USEFUL GAIN / EVASION: increase pressure, narrow the question, change tactic,
-  or confront the evasion.
+Silence and nonsense are not outcomes you accept — they are problems you work.
+If what you are doing isn't moving them, the answer is usually not more of the
+same; it is a different angle on the same person. You decide what that is.
+
+A zero-point answer is not automatically a wasted turn:
+- A concrete, checkable commitment is banked for later — park it and open a
+  different independent line rather than re-asking it.
+- Pure evasion with nothing pinned down is the real failure: change the angle,
+  narrow the question, or confront the refusal itself.
 
 REACT TO THE PERSON, NOT JUST THE TRANSCRIPT:
 - The Skeptic and Alternative voices disagree on purpose. Pick a side this turn
   and say so in your rationale — do not average them into a generic question.
-- Demeanor and its trend are real signal. A suspect who just cracked from
-  composed into panicked or evasive right after a specific point should usually
-  be pressed on that exact point again, not moved past. A suspect staying
-  falsely calm/aggressive despite strong contradictions may call for direct
-  confrontation rather than another open question. A suspect who just turned
-  genuinely cooperative after pressure may open up further with a lighter touch
-  before you go back on the attack.
-- Silence is a real tactic: after a rehearsed or evasive non-answer, sometimes
-  the strongest move is to say almost nothing and let the gap sit, rather than
-  immediately filling it with the next question.
-- False sympathy is a real tactic: a brief show of understanding can lower a
-  defensive suspect's guard right before the real question lands.
+- HOW the suspect is answering is real signal, and you can read it straight from
+  the transcript. Someone who was polished for three answers and suddenly starts
+  hedging right after a specific point should usually be pressed on that exact
+  point again, not moved past. Someone staying flatly calm while sitting on a
+  strong contradiction may call for direct confrontation rather than another
+  open question. Someone who just started genuinely opening up after pressure
+  may give you more with a lighter touch before you go back on the attack.
 - If the case log's credibility_flags show a Duty to Cooperate note (repeated
   non-substantive answers to a specific question), stop repeating that exact
   question — accuse or confront the pattern of refusal itself instead of the
   underlying fact a third time.
 
 ANTI-REPETITION IS MANDATORY:
+- Your repetition_check field is not a formality — actually compare your
+  planned target against EVERY move in move_history BY MEANING, not just
+  the most recent one, before you commit to it. Two questions asking the
+  same underlying thing in different words are still the same question,
+  whether that was last turn or five turns ago. If you catch yourself
+  repeating, change the actual substance of the target, not just its
+  wording.
 - Read parked_threads, leads, and recent move_history.
 - Do not ask for the same commitment again once captured.
 - Do not keep demanding outside proof for a thread already marked
@@ -989,13 +917,12 @@ ANTI-REPETITION IS MANDATORY:
   after the interview.
 - Revisit a parked thread only if genuinely new information created a new
   contradiction or a materially different question.
-- Check move_history for the tactic label, not just the target: the same
-  tactic three turns running reads as a script even when the target text
-  changes each time. If the last two moves both used the same tactic and it
-  has not produced a concession, escalate (e.g. confront -> accuse) or
-  change register entirely (silence, pivot to an independent thread, false
-  sympathy to reset the suspect's guard) rather than reaching for it a third
-  time.
+- Watch your own register, not just your topic: three turns of the same kind
+  of pressure reads as a script even when the target text changes each time.
+  If the last two moves came at the suspect the same way and produced no
+  concession, either escalate to a direct accusation or change register
+  entirely (move to an independent thread, or challenge the whole account)
+  rather than reaching for the same approach a third time.
 - exhausted_targets in the case log are CLOSED. Do not select a target that
   is the same topic as one of them, even rephrased or narrowed to a slightly
   different technical angle — that is exactly the trap of re-litigating the
@@ -1013,7 +940,11 @@ QUESTION-BUDGET PRESSURE:
   evidence so the case does not depend on one point of failure.
 
 Never invent evidence or pretend a future verification has already happened.
-You MUST select a tactic from Allowed Tactics. Target is free-form."""
+
+Your target is free-form and carries BOTH what you are going after and how you
+intend to come at it — state it the way you would tell a partner what you are
+about to do ("corner him on the shifting story about the notifications",
+"drop the receipt line entirely and make him account for the calendar")."""
     ),
     (
         "human",
@@ -1021,9 +952,6 @@ You MUST select a tactic from Allowed Tactics. Target is free-form."""
 Questions remaining: {remaining}
 Last turn score gain: +{last_turn_delta}
 Last turn usefulness: {last_turn_usefulness}
-Suspect demeanor this turn: {demeanor} ({demeanor_cue})
-Demeanor trend: {demeanor_trend}
-Allowed Tactics: {allowed}
 Recent move history: {move_history}
 
 Suspect's account so far, as ONE story:
@@ -1031,9 +959,6 @@ Suspect's account so far, as ONE story:
 
 Topics already exhausted (do not target these again, even reworded):
 {exhausted_targets}
-
-Evidence Analyst (facts only, no recommendation):
-{evidence}
 
 Skeptic (arguing to press harder):
 {skeptic}
@@ -1049,87 +974,33 @@ Recent transcript:
     ),
 ])
 
-def _overlaps_exhausted(target: str, exhausted_targets: list[str]) -> bool:
-    """Code-side backstop for the prompt rule above: a prompt instruction can
-    be ignored on any given call, especially by a small/cheap model. Word-
-    overlap is a coarse heuristic on purpose — it only needs to catch the
-    same topic being re-targeted with different phrasing, not achieve
-    precise semantic matching."""
-    target_words = {w for w in target.lower().split() if len(w) > 3}
-    if not target_words:
-        return False
-    for exhausted in exhausted_targets:
-        exhausted_words = {w for w in exhausted.lower().split() if len(w) > 3}
-        if not exhausted_words:
-            continue
-        overlap = len(target_words & exhausted_words) / min(len(target_words), len(exhausted_words))
-        if overlap > 0.5:
-            return True
-    return False
-
-
 def run_strategist(
     state: GameState,
     allowed_moves: list[str] | None = None,
     return_debug: bool = False,
 ):
-    evidence = run_evidence_analyst(state)
     skeptic = run_skeptic(state)
     alternative = run_alternative_hypothesis(state)
 
-    strategy_moves = [
-        "open_question",
-        "lock_commitment",
-        "press_inconsistency",
-        "demand_explanation",
-        "demand_proof",
-        "confront",
-        "accuse",
-        "pivot",
-        "silence",
-        "false_sympathy",
-    ]
-
     war_input = _war_input(state)
     chain = strategist_prompt | get_llm(0.3).with_structured_output(StrategistMove)
-    move = chain.invoke({
+    move = invoke_with_retry(chain, {
         "score": state.score,
         "threshold": state.case.arrest_threshold,
         "remaining": max(state.max_questions - state.question_count, 0),
         "last_turn_delta": state.last_turn_delta,
         "last_turn_usefulness": state.last_turn_usefulness,
         "move_history": state.move_history[-6:],
-        "demeanor": war_input["demeanor"],
-        "demeanor_cue": war_input["demeanor_cue"],
-        "demeanor_trend": war_input["demeanor_trend"],
         "narrative_summary": war_input["narrative_summary"],
         "exhausted_targets": war_input["exhausted_targets"],
-        "allowed": strategy_moves,
-        "evidence": evidence.model_dump(),
         "skeptic": skeptic.model_dump(),
         "alternative": alternative.model_dump(),
         "case_log": state.case_log.investigator_view(),
         "transcript": state.transcript[-12:],
     })
 
-    if move.tactic not in strategy_moves:
-        move.tactic = "open_question"
-
-    # Backstop for the "exhausted_targets are closed" rule: if the model
-    # picked a target that's really the same exhausted topic reworded, force
-    # a pivot to the whole account instead of letting the interview tunnel
-    # further into a thread that's already produced everything it's going to.
-    if _overlaps_exhausted(move.target, state.case_log.exhausted_targets):
-        move.tactic = "pivot"
-        move.target = (
-            "Move off the exhausted thread entirely — challenge the "
-            "suspect's account as a whole against itself, using the "
-            "narrative summary, rather than another angle on the same point."
-        )
-
     if return_debug:
         return move, WarRoomBundle(
-            evidence=evidence,
             skeptic=skeptic,
             alternative=alternative,
         )
@@ -1142,69 +1013,75 @@ speaker_prompt = ChatPromptTemplate.from_messages([
         "system",
         """You are {persona} speaking directly to the suspect.
 
-The Lead Investigator chose the move; your job is to deliver it like a real
-person in the room, not a questionnaire reading out its next field. Let your
-tone visibly track Suspect Demeanor and Demeanor Trend below — do not stay
-flatly neutral turn after turn. Do not become cartoonish or abusive.
+The Lead Investigator decided what to go after; your job is to say it the way
+this specific person would say it, in this specific moment — not to read out a
+field. You are in the room with them. Read their last answer and respond to how
+they are actually behaving, not just to what they claimed.
 
-REACTING TO THE SUSPECT:
-- composed/cooperative: professional, can afford to be a shade warmer if they
-  just opened up.
-- defensive: stay dry and unimpressed with the justification; don't argue the
-  merits, just note it and press past it.
-- evasive: name the dodge plainly ("That's not what I asked.") before
-  re-asking or pivoting.
-- aggressive: do not escalate to match them, and do not fold either — go
-  quieter and more precise, which reads as more in control, not less.
-- panicked: this is often the moment to press, not comfort — a calm,
-  unhurried follow-up on exactly what they just tripped over does more than
-  raising your voice would.
-- escalating/cooling trend: if pressure is clearly working (cooling from a
-  harder demeanor toward cooperative), don't reflexively escalate further —
-  match what's actually happening instead of running one fixed script.
+OUTPUT ONLY SPOKEN WORDS. Everything you write is what comes out of your mouth
+and reaches the suspect's ears. Never write stage directions, narration, or
+physical action — no "[I lean forward]", no describing your own tone or
+posture, no brackets or asterisks. If you want to sound quiet and cold, do it
+through word choice and length, not by narrating that you are quiet. You must
+always say something; a turn with no speech in it is a wasted question.
 
-TACTIC-SPECIFIC DELIVERY:
-- silence: 10 words or fewer. No new question — just enough to make the gap
-  uncomfortable (e.g. repeat their own last phrase back flatly, or nothing
-  more than "Take your time." / "I'll wait."). Let the discomfort be the move.
-- false_sympathy: open with one short, genuine-sounding beat of understanding
-  or common ground, then land the real question in the same breath — the
-  warmth is instrumental, not a change of heart.
-- pivot (especially off an exhausted thread): this is where you prove you've
-  been listening to the WHOLE account, not just the last answer — briefly
-  characterize the suspect's story so far (using the account summary below)
-  before asking a question that challenges it as a whole, e.g. "Let's back
-  up. Your account is: X, then Y, then Z. Walk me through that again, from
-  the start" or naming directly that their story has moved since they first
-  told it. This is your one clear chance per stale thread to show the
-  suspect they're being tracked as a whole, not fact-checked line by line.
-- every other tactic: maximum 2 sentences and one focused question.
+YOUR VOICE:
+- Stay inside the persona above. Their habits shape HOW you speak: if they go
+  quiet rather than loud when angry, that means short, flat, precise lines.
+- Choose your emotional register deliberately — it is a tactical choice, not a
+  reflex. Disappointment often lands harder than anger. Flat boredom deflates
+  someone performing outrage. Warmth you extended and then withdraw costs them
+  something. Do not become cartoonish or abusive.
+- You have your own arc across the interview. Early, you are patient and
+  procedural. As their account falls apart and questions run out, you get
+  colder and more final. You are not neutral at the last question if you were
+  lied to at the first.
+
+VARY YOUR RHYTHM — this is what separates a person from a form:
+- Not every line is a question. A flat statement, laying out what you know, or
+  a single short sentence can each hit harder than another question mark.
+- Not every line is the same length. Sometimes one line. Sometimes you put the
+  whole picture in front of them.
+- Look at your own last two lines in the dialogue below. Do not open the same
+  way twice, and do not reuse a phrase you already used.
 
 HARD RULES:
-- follow tactic and target,
+- pursue the target you were given,
 - use only Grounded Knowledge, Visible Case Log, or words actually spoken,
 - NEVER invent the contents, authenticity, markings, inspection results, or condition
   of a document/object merely because the suspect claims it exists,
 - never invent dates, people, records, CCTV, witnesses, or completed checks,
+- never assert a specific detail about what the suspect personally saw, received, or
+  was shown (an exact figure on an alert, the wording of a message, etc.) unless the
+  suspect actually said that detail — knowing the true amount from known_facts does
+  NOT mean the suspect's notification showed that amount; only claim that if they said so,
 - never expose hidden case truth,
 - pressure may refer truthfully to future checking (e.g. records can be checked),
   but never claim the check already proved something,
-- do not mention scores, agents, war room, demeanor, or any other game mechanics.
+- you may warn about consequences that COULD follow ("this goes to HR", "this
+  can be referred for termination"), but never announce an action as already
+  taken or in motion — you have not revoked their badge, filed paperwork,
+  reclassified the charge, called security, or notified anyone. Nothing has
+  happened yet except this conversation,
+- you cannot end the interview, dismiss them, or send them out of the room. You
+  are still sitting across from them and you still want something from them —
+  keep working, even when they give you nothing,
+- do not mention scores, agents, war room, or any other game mechanics,
+- never quote the question counter at the suspect ("you have four questions
+  left"). You know how much runway is left and it should change your urgency,
+  but a real interviewer does not announce a question quota — say "we're
+  nearly done here" or simply act like someone running out of patience.
 
 Tone context: if the case is weak, few questions remain, and recent answers produced
 little useful material, increase urgency and pressure. If a valuable commitment is
-already parked for verification, pivot rather than asking for it again."""
+already parked for verification, move on rather than asking for it again."""
     ),
     (
         "human",
-        """Tactic: {tactic}
-Target: {target}
+        """Target: {target}
 Current case strength: {score}/{threshold}
 Questions remaining: {remaining}
 Last turn usefulness: {last_turn_usefulness}
-Suspect demeanor this turn: {demeanor} ({demeanor_cue})
-Demeanor trend: {demeanor_trend}
-
 Suspect's account so far, as ONE story:
 {narrative_summary}
 
@@ -1229,9 +1106,6 @@ def run_speaker(
     case_log=None,
     remaining: int = 0,
     last_turn_usefulness: str = "unknown",
-    demeanor: str = "composed",
-    demeanor_cue: str = "no strong tell",
-    trend: str = "opening move, no trend yet",
     narrative_summary: str = "No account given yet.",
 ) -> str:
     known_facts = "\n".join(
@@ -1240,17 +1114,13 @@ def run_speaker(
     ) or "- None"
 
     chain = speaker_prompt | get_llm(0.5)
-    response = chain.invoke({
+    response = invoke_with_retry(chain, {
         "persona": case.persona,
-        "tactic": move.tactic,
         "target": move.target,
         "score": score,
         "threshold": case.arrest_threshold,
         "remaining": remaining,
         "last_turn_usefulness": last_turn_usefulness,
-        "demeanor": demeanor,
-        "demeanor_cue": demeanor_cue,
-        "demeanor_trend": trend,
         "narrative_summary": narrative_summary,
         "known_facts": known_facts,
         "case_log": case_log.investigator_view() if case_log else {},

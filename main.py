@@ -13,7 +13,6 @@ from models import (
     FindingBasis,
     GameState,
     RiskProfile,
-    demeanor_trend,
 )
 from game_logic import (
     case_decisively_resolved,
@@ -187,12 +186,6 @@ def run_turn(
         transcript=state.transcript,
     )
 
-    # Demeanor is read fresh each turn from this answer alone (Rule 7 in the
-    # extractor prompt); any trend across turns is derived in code from this
-    # history, never re-asked of an LLM (see models.demeanor_trend).
-    state.demeanor_history.append(extracted.demeanor.value)
-    state.last_demeanor_cue = extracted.demeanor_cue or None
-
     # Hold the suspect's account as one story, separate from the atomic
     # claims list below. This is what catches a suspect contradicting their
     # OWN earlier words (walked-back denials, a detail that quietly changed)
@@ -335,8 +328,6 @@ def run_turn(
         f"PLAYER ANSWER (RAW):\n{player_answer}\n\n"
         f"REALITY GATE:\n{json.dumps(gate.model_dump(), indent=2, ensure_ascii=False)}\n\n"
         f"ANALYZED ANSWER:\n{analysis_answer}\n\n"
-        f"DEMEANOR: {state.current_demeanor} ({state.last_demeanor_cue or 'no strong tell'}) "
-        f"| trend: {demeanor_trend(state.demeanor_history)}\n\n"
         f"SUSPECT NARRATIVE:\n{narrative.summary}\n"
         f"SELF-CONTRADICTIONS FOUND THIS TURN:\n"
         + ("\n".join(
@@ -359,8 +350,6 @@ def run_turn(
         + ("\n".join(f"- {d}" for d in extracted.new_defenses) or "- None")
         + "\n\nCHECKER FINDINGS:\n"
         + _format_checker_results(results)
-        + "\n\nEVIDENCE ANALYST:\n"
-        + json.dumps(war_room.evidence.model_dump(), indent=2, ensure_ascii=False)
         + "\n\nBAD COP / SKEPTIC:\n"
         + json.dumps(war_room.skeptic.model_dump(), indent=2, ensure_ascii=False)
         + "\n\nGOOD COP / ALTERNATIVE HYPOTHESIS:\n"
@@ -374,11 +363,11 @@ def run_turn(
         + json.dumps(state.case_log.investigator_view(), indent=2, ensure_ascii=False)
     )
 
-    state.last_move = f"{move.tactic}:{move.target}"
+    state.last_move = move.target
     state.move_history.append(state.last_move)
 
     print(
-        f"  [strategy] tactic={move.tactic} | target={move.target} | "
+        f"  [strategy] target={move.target} | "
         f"remaining={state.max_questions - state.question_count}"
     )
 
@@ -390,9 +379,6 @@ def run_turn(
         case_log=state.case_log,
         remaining=max(state.max_questions - state.question_count, 0),
         last_turn_usefulness=state.last_turn_usefulness,
-        demeanor=state.current_demeanor,
-        demeanor_cue=state.last_demeanor_cue or "no strong tell",
-        trend=demeanor_trend(state.demeanor_history),
         narrative_summary=narrative.summary,
     )
     state.transcript.append({"role": "investigator", "text": line})
