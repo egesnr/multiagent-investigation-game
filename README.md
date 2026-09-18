@@ -1,3 +1,13 @@
+---
+title: The Box
+emoji: 🔍
+colorFrom: red
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Multi-Agent Investigation Game
 
 An open-world suspect interview used to demonstrate and stress-test a multi-agent investigation architecture.
@@ -44,8 +54,10 @@ set GAME_MODEL=gemini-3.1-flash-lite
 python main.py
 ```
 
-Or:
+Or, for the browser UI ("The Box" — an animated interrogation room instead of a terminal transcript):
 
 ```bash
-python app.py
+python server.py
 ```
+
+Then open http://127.0.0.1:8000. It's a single FastAPI process serving `web/index.html` and running the same pipeline as `main.py` underneath — a real interview, so each answer takes a few seconds to get a reply. Single session at a time by design; it's a demo of the agent architecture, not a hosted multi-user service.

@@ -1,0 +1,1209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>The Box</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Courier+Prime:wght@400;700&family=Special+Elite&family=Arvo:wght@400;700&display=swap">
+<style>
+  :root{
+    --wall:#262b31;
+    --wall-dark:#181c20;
+    --floor:#1a1d21;
+    --floor-line:#111316;
+    --mirror-a:#0c1116;
+    --mirror-b:#2a3742;
+    --table:#332821;
+    --table-edge:#241b16;
+    --silhouette:#0d0f12;
+    --hands:#171a1e;
+    --paper:#e7ded0;
+    --paper-ink:#241f18;
+    --console-bg:#1e2126;
+    --console-panel:#262a30;
+    --console-border:#383d44;
+    --console-text:#c9cdd3;
+    --console-dim:#7d838c;
+    --accent-oxblood:#9c3b2e;
+    --accent-amber:#c98a3d;
+    --accent-teal:#4f8f86;
+    --accent-slate:#6b7480;
+    --accent-cool:#57708a;
+    --accent-blue:#3a5c8c;
+    --good:#5b8c6e;
+    color-scheme: dark;
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    background:var(--console-bg);
+    color:var(--console-text);
+    font-family:'IBM Plex Mono', ui-monospace, monospace;
+    padding: 28px 20px 60px;
+  }
+
+  .wrap{
+    max-width:1040px;
+    margin:0 auto;
+    display:flex;
+    flex-direction:column;
+    gap:22px;
+  }
+
+  header.page-head{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:16px;
+    padding-bottom:14px;
+    border-bottom:1px solid var(--console-border);
+    flex-wrap:wrap;
+  }
+  header.page-head .titles{ display:flex; flex-direction:column; gap:6px; }
+  header.page-head h1{
+    font-family:'Oswald', sans-serif;
+    font-weight:600;
+    font-size:1.9rem;
+    letter-spacing:0.02em;
+    margin:0;
+    text-wrap:balance;
+    color:#eceef0;
+  }
+  header.page-head p{
+    margin:0;
+    color:var(--console-dim);
+    font-size:0.85rem;
+    max-width:64ch;
+    line-height:1.5;
+  }
+  .screen-toggle{
+    font-family:'Oswald', sans-serif;
+    font-size:0.66rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    background:transparent;
+    border:1px solid var(--console-border);
+    color:var(--console-dim);
+    padding:7px 12px;
+    border-radius:3px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .screen-toggle:hover{ color:#e7e9eb; border-color:#5a616a; }
+  .screen-toggle:disabled{ opacity:0.5; cursor:default; }
+
+  [hidden]{ display:none !important; }
+
+  /* ================= CASE-FILE STYLE (briefing + resolution) ================= */
+  .filepage{
+    background: linear-gradient(180deg, #d9d0bd, #cbc0a8);
+    color:#2a2317;
+    border-radius:4px;
+    padding:34px clamp(20px,5vw,52px);
+    position:relative;
+    box-shadow: 0 14px 40px -18px #000a, inset 0 0 0 1px #00000022;
+    overflow:hidden;
+  }
+  .filepage::before{
+    content:"";
+    position:absolute; inset:10px;
+    border:1px solid #00000022;
+    pointer-events:none;
+  }
+  .filepage-top{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    font-family:'Oswald', sans-serif;
+    font-size:0.68rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:#5a4f3a;
+    border-bottom:1px dashed #6b5f45;
+    padding-bottom:14px;
+    margin-bottom:20px;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  .stamp{
+    font-family:'Special Elite', monospace;
+    color:var(--accent-oxblood);
+    border:3px solid var(--accent-oxblood);
+    border-radius:4px;
+    padding:4px 12px;
+    transform:rotate(-6deg);
+    font-size:0.9rem;
+    letter-spacing:0.08em;
+    opacity:0.85;
+  }
+  .filepage h2{
+    font-family:'Arvo', 'Courier Prime', serif;
+    font-weight:700;
+    font-size:1.9rem;
+    letter-spacing:0.01em;
+    margin:0 0 4px;
+    text-wrap:balance;
+    color:#1c1710;
+  }
+  .filepage .subhead{
+    font-family:'Courier Prime', monospace;
+    font-size:0.95rem;
+    color:#5a4f3a;
+    margin:0 0 22px;
+  }
+  .briefing-grid{
+    display:grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap:26px;
+  }
+  @media (max-width:700px){ .briefing-grid{ grid-template-columns:1fr; } }
+  .filepage h3{
+    font-family:'Oswald', sans-serif;
+    font-size:0.72rem;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:#6b5f45;
+    margin:0 0 8px;
+  }
+  .filepage p, .filepage li{
+    font-size:0.88rem;
+    line-height:1.6;
+    color:#2a2317;
+  }
+  .filepage ul{ margin:0; padding-left:18px; }
+  .filepage li{ margin-bottom:6px; }
+  .objective-box{
+    margin-top:18px;
+    background:#fff8;
+    border:1px solid #6b5f45;
+    border-left:4px solid var(--accent-oxblood);
+    padding:12px 14px;
+    font-size:0.88rem;
+    line-height:1.5;
+  }
+  .quote-line{ font-family:'Courier Prime', monospace; font-size:0.85rem; }
+  .begin-btn{
+    margin-top:26px;
+    font-family:'Oswald', sans-serif;
+    font-size:0.78rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    background:#1c1710;
+    color:#e9e1cd;
+    border:none;
+    padding:12px 22px;
+    border-radius:2px;
+    cursor:pointer;
+  }
+  .begin-btn:hover{ background:#332a1b; }
+  .begin-btn:disabled{ opacity:0.5; cursor:default; }
+  .link-btn{
+    background:none; border:none; padding:0;
+    font-family:'Oswald', sans-serif;
+    font-size:0.7rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:#5a4f3a;
+    text-decoration:underline;
+    cursor:pointer;
+  }
+
+  /* ================= RESOLUTION SCREEN ================= */
+  .resolution-body{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+    padding:10px 0 4px;
+  }
+  .verdict-stamp{
+    font-family:'Special Elite', monospace;
+    font-size:clamp(1.8rem, 6vw, 2.7rem);
+    letter-spacing:0.04em;
+    border:5px solid var(--verdict-color, var(--accent-oxblood));
+    color:var(--verdict-color, var(--accent-oxblood));
+    padding:10px 26px;
+    border-radius:6px;
+    transform:rotate(-5deg);
+    opacity:0;
+    animation: stampIn 620ms cubic-bezier(.2,.9,.3,1.2) forwards;
+    animation-delay:150ms;
+  }
+  @keyframes stampIn{
+    0%{ opacity:0; transform:scale(2.6) rotate(-16deg); }
+    55%{ opacity:1; transform:scale(0.92) rotate(-4deg); }
+    75%{ transform:scale(1.06) rotate(-6deg); }
+    100%{ opacity:1; transform:scale(1) rotate(-5deg); }
+  }
+  .filepage.resolution.impact{ animation: impactShake 360ms ease; animation-delay:560ms; }
+  @keyframes impactShake{
+    0%{ transform:translate(0,0); }
+    25%{ transform:translate(-4px,2px); }
+    50%{ transform:translate(3px,-2px); }
+    75%{ transform:translate(-2px,1px); }
+    100%{ transform:translate(0,0); }
+  }
+  .score-readout{
+    margin-top:18px;
+    font-family:'IBM Plex Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size:1rem;
+    color:#3a3120;
+  }
+  .score-readout b{ font-size:1.3rem; }
+  .aftermath{
+    margin-top:22px;
+    max-width:56ch;
+    font-size:0.92rem;
+    line-height:1.65;
+    color:#2a2317;
+    text-align:left;
+    background:#fff6;
+    border:1px solid #6b5f45;
+    padding:14px 16px;
+  }
+  .cop-lights{
+    position:absolute; inset:0;
+    pointer-events:none;
+    opacity:0;
+  }
+  .cop-lights.on{ animation: copLights 1.5s ease-out 1; }
+  @keyframes copLights{
+    0%{ opacity:0; background:transparent; }
+    8%{ opacity:1; background:var(--accent-oxblood); }
+    20%{ opacity:0; }
+    32%{ opacity:1; background:var(--accent-blue); }
+    44%{ opacity:0; }
+    56%{ opacity:.8; background:var(--accent-oxblood); }
+    68%{ opacity:0; }
+    80%{ opacity:.6; background:var(--accent-blue); }
+    100%{ opacity:0; }
+  }
+  .resolution-actions{ display:flex; gap:14px; margin-top:26px; flex-wrap:wrap; justify-content:center; }
+
+  /* ================= INTERVIEW SCREEN ================= */
+  .scene-grid{
+    display:grid;
+    grid-template-columns: 2fr 1fr;
+    gap:14px;
+  }
+  @media (max-width:700px){
+    .scene-grid{ grid-template-columns: 1fr; }
+  }
+
+  .room-frame{
+    position:relative;
+    aspect-ratio:16/10;
+    background:var(--wall);
+    border-radius:4px;
+    overflow:hidden;
+    border:1px solid #000;
+    box-shadow: inset 0 0 0 1px #3a4048, 0 10px 30px -12px #000a;
+  }
+  .room-frame svg{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+  #camera{ transform-origin: 560px 260px; transform: scale(1) translate(0px,0px); }
+
+  .investigator{ transform-origin: 560px 300px; }
+
+  .lamp-shade{ transition: fill 700ms ease; }
+  .vignette{ transition: opacity 900ms ease; }
+
+  .flash{
+    position:absolute; inset:0;
+    background:var(--accent-oxblood);
+    opacity:0;
+    pointer-events:none;
+    mix-blend-mode:screen;
+  }
+  .flash.hit{ animation: flashpulse 480ms ease; }
+  @keyframes flashpulse{
+    0%{ opacity:0; }
+    18%{ opacity:.55; }
+    100%{ opacity:0; }
+  }
+  .room-frame.shake{ animation: shake 420ms ease; }
+  @keyframes shake{
+    0%{ transform:translate(0,0); }
+    15%{ transform:translate(-6px,2px); }
+    30%{ transform:translate(5px,-3px); }
+    45%{ transform:translate(-4px,3px); }
+    60%{ transform:translate(3px,-2px); }
+    75%{ transform:translate(-2px,1px); }
+    100%{ transform:translate(0,0); }
+  }
+
+  .hud-caseline{
+    position:absolute; top:10px; left:12px;
+    font-family:'Oswald', sans-serif;
+    font-size:0.62rem;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:#cfd4da;
+    background:#00000055;
+    padding:4px 8px;
+    border-radius:2px;
+    display:flex; align-items:center; gap:8px;
+    z-index:2;
+  }
+  .rec-dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--accent-oxblood);
+    animation: blink 1.6s steps(1) infinite;
+    box-shadow: 0 0 6px var(--accent-oxblood);
+  }
+  @keyframes blink{ 0%,49%{opacity:1;} 50%,100%{opacity:.25;} }
+
+  .hud-thread{
+    position:absolute; top:10px; right:12px; left:auto;
+    max-width:58%;
+    font-family:'Oswald', sans-serif;
+    font-size:0.6rem;
+    letter-spacing:0.06em;
+    text-transform:none;
+    color:#c9cdd3;
+    background:#00000055;
+    padding:4px 9px;
+    border-radius:2px;
+    border-left:3px solid var(--accent-slate);
+    z-index:2;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  /* Transcript panel */
+  .transcript-panel{
+    grid-column: 1 / -1;
+    background:#14161a;
+    border:1px solid var(--console-border);
+    border-radius:3px;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .transcript-panel .t-head{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:8px 14px;
+    border-bottom:1px solid var(--console-border);
+    font-family:'Oswald', sans-serif;
+    font-size:0.62rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--console-dim);
+  }
+  .t-head .t-status{ font-variant-numeric:tabular-nums; color:#c9cdd3; }
+  .t-scroll{
+    max-height:260px;
+    overflow-y:auto;
+    padding:4px 0;
+  }
+  .t-divider{
+    display:flex; align-items:center; gap:8px;
+    padding:10px 14px 4px;
+    font-family:'Oswald', sans-serif;
+    font-size:0.58rem;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:#5c626b;
+  }
+  .t-divider::after{ content:""; flex:1; height:1px; background:#2c3036; }
+  .t-row{
+    padding:7px 16px 9px 14px;
+    border-left:4px solid transparent;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    animation: rowin 260ms ease;
+  }
+  @keyframes rowin{ from{ opacity:0; transform:translateY(-4px); } }
+  .t-row.investigator{ border-left-color:var(--accent-slate); }
+  .t-row.subject{ border-left-color:#5a4f3a; background:#ffffff05; }
+  .t-row.system{ border-left-color:#3a4048; }
+  .t-row .who{
+    font-family:'Oswald', sans-serif;
+    font-size:0.6rem;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--console-dim);
+  }
+  .t-row.investigator .who{ color:#9aa4b0; }
+  .t-row.investigator .who::before{ content:"Q · "; }
+  .t-row.subject .who::before{ content:"A · "; }
+  .t-row.subject .who{ color:#c9b79a; }
+  .t-row .txt{ font-size:0.86rem; line-height:1.55; color:#e7e9eb; }
+  .t-row.system .txt{ font-size:0.8rem; font-style:italic; color:var(--console-dim); }
+  .t-flag{
+    margin-top:4px;
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:'Oswald', sans-serif;
+    font-size:0.62rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--accent-oxblood);
+    width:fit-content;
+  }
+  .t-flag::before{ content:"⚑"; }
+  .t-flag .pts{ color:#c9cdd3; font-family:'IBM Plex Mono', monospace; letter-spacing:0; }
+
+  /* Dossier panel */
+  .dossier{
+    background:#1b1e23;
+    border:1px solid var(--console-border);
+    border-radius:4px;
+    padding:12px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .dossier h2{
+    margin:0;
+    font-family:'Oswald', sans-serif;
+    font-size:0.68rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--console-dim);
+    border-bottom:1px solid var(--console-border);
+    padding-bottom:6px;
+  }
+
+  .turn-pips{ display:flex; gap:5px; flex-wrap:wrap; }
+  .turn-pips i{
+    width:11px; height:11px; border-radius:50%;
+    background:#33383f; border:1px solid #464c54;
+    display:block;
+  }
+  .turn-pips i.on{ background:var(--accent-amber); border-color:var(--accent-amber); }
+
+  .tension-row{ display:flex; align-items:flex-end; gap:12px; }
+  .tension-bar-track{
+    width:20px; height:96px;
+    background:#101215;
+    border:1px solid #3a4048;
+    border-radius:3px;
+    position:relative;
+    overflow:hidden;
+  }
+  .tension-bar-fill{
+    position:absolute; left:0; right:0; bottom:0;
+    height:8%;
+    background:var(--good);
+    transition: height 700ms ease, background 700ms ease;
+  }
+  .tension-readout{ display:flex; flex-direction:column; gap:2px; font-variant-numeric:tabular-nums; }
+  .tension-readout .score{ font-size:1.5rem; color:#eceef0; }
+  .tension-readout .tier-label{ font-size:0.72rem; color:var(--console-dim); text-transform:uppercase; letter-spacing:0.06em; }
+
+  .board{
+    position:relative;
+    background:#4a3a2c;
+    background-image: radial-gradient(#00000022 1px, transparent 1px);
+    background-size: 9px 9px;
+    border:1px solid #2c2115;
+    border-radius:3px;
+    min-height:150px;
+    padding:8px;
+    display:flex;
+    flex-wrap:wrap;
+    align-content:flex-start;
+    gap:8px;
+  }
+  .board .empty-note{
+    font-family:'Courier Prime', 'IBM Plex Mono', monospace;
+    color:#c9b79a;
+    font-size:0.72rem;
+    padding:6px;
+  }
+  .card{
+    width:78px;
+    background:var(--paper);
+    color:var(--paper-ink);
+    padding:6px 6px 8px;
+    border-radius:1px;
+    box-shadow: 1px 2px 4px #0006;
+    font-family:'Courier Prime', monospace;
+    font-weight:700;
+    font-size:0.6rem;
+    line-height:1.3;
+    position:relative;
+    animation: pin-in 320ms ease;
+  }
+  @keyframes pin-in{
+    from{ opacity:0; transform: translateY(-10px) rotate(0deg) scale(0.9); }
+  }
+  .card .pin{
+    position:absolute; top:-4px; left:50%; transform:translateX(-50%);
+    width:7px; height:7px; border-radius:50%;
+    background:var(--accent-oxblood);
+    box-shadow:0 1px 2px #0008;
+  }
+  .card .tag{ font-weight:bold; display:block; }
+  .card .turn{ color:#6b5f4d; font-weight:400; }
+
+  .t-input-row{
+    display:flex;
+    gap:8px;
+    padding:10px 14px;
+    border-top:1px solid var(--console-border);
+    background:#181a1e;
+  }
+  .t-input-row input{
+    flex:1;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.85rem;
+    background:#0f1114;
+    border:1px solid #3a4048;
+    color:#e7e9eb;
+    padding:9px 11px;
+    border-radius:3px;
+  }
+  .t-input-row input:focus{ outline:none; border-color:var(--accent-teal); }
+  .t-input-row input:disabled{ opacity:0.6; }
+  .t-input-row .send-btn{
+    font-family:'Oswald', sans-serif;
+    font-size:0.65rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    background:transparent;
+    border:1px solid var(--console-border);
+    color:var(--console-dim);
+    padding:9px 18px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  .t-input-row .send-btn:hover{ color:#e7e9eb; border-color:#5a616a; }
+  .t-input-row .send-btn:disabled{ opacity:0.5; cursor:default; }
+
+  footer.note{
+    font-size:0.72rem;
+    color:var(--console-dim);
+    line-height:1.6;
+    max-width:74ch;
+  }
+  footer.note code{
+    background:#14161a;
+    padding:1px 5px;
+    border-radius:2px;
+    border:1px solid var(--console-border);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .room-frame.shake{ animation:none; }
+    .flash.hit{ animation:none; }
+    .card{ animation:none; }
+    .verdict-stamp{ animation:none; opacity:1; transform:rotate(-5deg); }
+    .filepage.resolution.impact{ animation:none; }
+    .cop-lights.on{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="page-head">
+    <div class="titles">
+      <h1>The Box</h1>
+      <p id="pageLede">Loading case file…</p>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="screen-toggle" id="soundBtn">🔊 Sound</button>
+      <button class="screen-toggle" id="screenToggle" disabled>View interview room →</button>
+    </div>
+  </header>
+
+  <!-- ================= BRIEFING SCREEN ================= -->
+  <section class="filepage" id="briefingScreen">
+    <div class="filepage-top">
+      <span id="scenarioLabel">Internal Investigation</span>
+      <span class="stamp">CONFIDENTIAL</span>
+    </div>
+    <h2 id="caseTitle">Case File</h2>
+    <p class="subhead" id="personaLine">Loading…</p>
+
+    <div class="briefing-grid">
+      <div>
+        <h3>What you know happened</h3>
+        <ul id="suspectFacts"></ul>
+        <h3 style="margin-top:18px;">In the room</h3>
+        <ul id="roomObjects"></ul>
+      </div>
+      <div>
+        <h3>Your objective</h3>
+        <div class="objective-box" id="objectiveText">&mdash;</div>
+        <h3 style="margin-top:18px;">Opening question</h3>
+        <p class="quote-line" id="openingQuoteText">&mdash;</p>
+      </div>
+    </div>
+
+    <button class="begin-btn" id="beginBtn" disabled>Begin interview →</button>
+  </section>
+
+  <!-- ================= INTERVIEW SCREEN ================= -->
+  <section id="interviewScreen" hidden>
+
+  <div class="scene-grid">
+    <div class="room-frame" id="room" data-tier="1">
+      <svg viewBox="0 0 960 600" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <radialGradient id="lampGlow" cx="50%" cy="0%" r="75%">
+            <stop offset="0%" stop-color="var(--lamp-glow-color, #f4c983)" stop-opacity="0.55"/>
+            <stop offset="100%" stop-color="var(--lamp-glow-color, #f4c983)" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="mirrorGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="var(--mirror-a)"/>
+            <stop offset="55%" stop-color="var(--mirror-b)"/>
+            <stop offset="100%" stop-color="var(--mirror-a)"/>
+          </linearGradient>
+          <linearGradient id="floorGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--floor)"/>
+            <stop offset="100%" stop-color="var(--floor-line)"/>
+          </linearGradient>
+          <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+            <rect width="4" height="2" fill="#ffffff"/>
+          </pattern>
+        </defs>
+
+        <g id="camera">
+          <rect x="0" y="0" width="960" height="370" fill="var(--wall)"/>
+          <rect x="0" y="330" width="960" height="40" fill="var(--wall-dark)" opacity="0.5"/>
+
+          <rect x="60" y="70" width="230" height="150" rx="2" fill="url(#mirrorGrad)" stroke="#0a0c0f" stroke-width="6"/>
+          <rect x="60" y="70" width="230" height="150" rx="2" fill="#ffffff" opacity="0.03"/>
+
+          <g opacity="0.75">
+            <path d="M878,300 Q882,278 902,278 Q922,278 924,300 L928,350 L872,350 Z" fill="var(--silhouette)"/>
+            <circle cx="901" cy="266" r="15" fill="var(--silhouette)"/>
+            <rect x="885" y="320" width="34" height="22" rx="2" fill="#3a4048"/>
+          </g>
+
+          <rect x="0" y="370" width="960" height="230" fill="url(#floorGrad)"/>
+          <line x1="0" y1="370" x2="960" y2="370" stroke="#000" stroke-opacity="0.4"/>
+
+          <line x1="560" y1="0" x2="560" y2="118" stroke="#0c0e11" stroke-width="3"/>
+          <polygon class="lamp-glow" id="lampGlowEl" points="440,420 680,420 560,120" fill="url(#lampGlow)" opacity="0.55"/>
+          <path class="lamp-shade" d="M520,118 L600,118 L622,150 L498,150 Z" fill="var(--lamp-shade-color, #f4c983)"/>
+          <circle cx="560" cy="150" r="5" fill="#fff8e6"/>
+
+          <polygon points="300,470 660,470 760,600 200,600" fill="var(--table)"/>
+          <polygon points="300,470 660,470 668,486 292,486" fill="var(--table-edge)"/>
+
+          <g class="investigator" id="investigator">
+            <path d="M470,300 Q480,250 560,250 Q640,250 650,300 L660,420 L460,420 Z" fill="var(--silhouette)"/>
+            <circle cx="560" cy="228" r="34" fill="var(--silhouette)"/>
+
+            <g>
+              <rect x="480" y="450" width="42" height="14" rx="5" fill="var(--hands)"/>
+              <rect x="598" y="450" width="42" height="14" rx="5" fill="var(--hands)"/>
+            </g>
+          </g>
+        </g>
+
+        <rect class="scanlines" x="0" y="0" width="960" height="600" fill="url(#scan)" opacity="0.02"/>
+        <rect class="vignette" id="vignetteEl" x="0" y="0" width="960" height="600" fill="#000000" opacity="0.08"/>
+      </svg>
+
+      <div class="flash" id="flash"></div>
+
+      <div class="hud-caseline">
+        <span class="rec-dot"></span> <span id="hudCaseLabel">INTERVIEW FEED</span>
+      </div>
+
+      <div class="hud-thread" id="hudThread">opening question</div>
+    </div>
+
+    <div class="dossier">
+      <div>
+        <h2>Question</h2>
+        <div class="turn-pips" id="pips"></div>
+      </div>
+
+      <div>
+        <h2>Tension</h2>
+        <div class="tension-row">
+          <div class="tension-bar-track">
+            <div class="tension-bar-fill" id="tensionFill"></div>
+          </div>
+          <div class="tension-readout">
+            <span class="score" id="scoreNum">0</span>
+            <span class="tier-label" id="tierLabel">Tier 1 &middot; routine</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2>Evidence Board</h2>
+        <div class="board" id="board">
+          <span class="empty-note">&mdash; nothing pinned yet &mdash;</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="transcript-panel">
+      <div class="t-head">
+        <span>Transcript &mdash; question &amp; answer only</span>
+        <span class="t-status" id="tStatus">Question 1/8 · 0 pts</span>
+      </div>
+      <div class="t-scroll" id="tScroll"></div>
+      <div class="t-input-row">
+        <input type="text" id="answerInput" placeholder="Type your answer as the suspect…" autocomplete="off" />
+        <button class="send-btn" id="sendAnswerBtn">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="note">
+    This room is driven entirely by the real pipeline: <code>state.score</code> / <code>state.tier</code> set the lamp, camera zoom and vignette; the top-right label shows the Strategist's real free-form <code>target</code> for the next question; each claim in <code>case_log</code> with nonzero <code>evidentiary_impact</code> pins a card and flags your answer. Nothing here is scripted &mdash; every line is a real LLM call, which is why an answer takes a few seconds to get a reply.
+  </footer>
+
+  </section>
+
+  <!-- ================= RESOLUTION SCREEN ================= -->
+  <section class="filepage resolution" id="resolutionScreen" hidden>
+    <div class="cop-lights" id="copLights"></div>
+    <div class="filepage-top">
+      <span id="scenarioLabelResolution">Internal Investigation</span>
+      <span class="stamp" style="border-color:#6b5f45; color:#5a4f3a;">CLOSED</span>
+    </div>
+    <h2 id="resolutionTitle">Resolution</h2>
+    <p class="subhead" id="resolutionPersonaLine"></p>
+
+    <div class="resolution-body">
+      <div class="verdict-stamp" id="verdictStamp">&mdash;</div>
+      <div class="score-readout">Final case score: <b id="finalScore">0</b> / <span id="finalThreshold">80</span></div>
+      <div class="aftermath" id="aftermathText">&mdash;</div>
+      <div class="resolution-actions">
+        <button class="begin-btn" id="restartBtn">↻ Run another interview</button>
+        <button class="link-btn" id="backToFileBtn">← Review case file</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- Typewriter ("dactilo") sound for the investigator's lines ----------
+  var soundOn = true;
+  var audioCtx = null;
+  function ensureAudio(){
+    if (!soundOn) return;
+    if (!audioCtx){
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = new Ctx();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function playClack(){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+    var t = audioCtx.currentTime;
+    var len = Math.floor(audioCtx.sampleRate * 0.02);
+    var buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < len; i++){ data[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 1.5); }
+    var src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    var filter = audioCtx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 1800;
+    filter.Q.value = 2;
+    var gain = audioCtx.createGain();
+    gain.gain.value = 0.3;
+    src.connect(filter).connect(gain).connect(audioCtx.destination);
+    src.start(t);
+  }
+
+  function playBell(){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+    var t = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = 520;
+    var gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.12, t + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.16);
+  }
+
+  // TIER_TABLE mirrors game_logic.apply_tier: (0,20,1) (20,40,2) (40,60,3) (60,80,4) (80+,5)
+  var TIERS = [
+    { n:1, lo:0,  hi:20,  label:'Tier 1 · routine',      lamp:'#f4c983', flicker:0,     vignette:0.06, barColor:'#5b8c6e', cam:{s:1.00, tx:0, ty:0}   },
+    { n:2, lo:20, hi:40,  label:'Tier 2 · attentive',     lamp:'#efc27c', flicker:0.02,  vignette:0.14, barColor:'#7a9463', cam:{s:1.04, tx:0, ty:-4} },
+    { n:3, lo:40, hi:60,  label:'Tier 3 · pressing',      lamp:'#e0b06a', flicker:0.05,  vignette:0.26, barColor:'#c98a3d', cam:{s:1.08, tx:0, ty:-8} },
+    { n:4, lo:60, hi:80,  label:'Tier 4 · closing in',    lamp:'#cf9d66', flicker:0.10,  vignette:0.42, barColor:'#c06a3d', cam:{s:1.13, tx:0, ty:-13} },
+    { n:5, lo:80, hi:999, label:'Tier 5 · arrest range',  lamp:'#e9d9c2', flicker:0.18,  vignette:0.60, barColor:'#9c3b2e', cam:{s:1.20, tx:0, ty:-18} }
+  ];
+
+  function tierFromScore(score){
+    for (var i = 0; i < TIERS.length; i++){
+      if (score >= TIERS[i].lo && score < TIERS[i].hi) return TIERS[i].n;
+    }
+    return 5;
+  }
+
+  // Visual mapping only — colors/labels per real FinalOutcome (models.py).
+  var VERDICT_LOOKS = {
+    CAUGHT:                 { label:'CAUGHT',           color:'var(--accent-oxblood)', lights:true },
+    NOT_PROVEN:             { label:'NOT PROVEN',       color:'var(--accent-cool)',    lights:false },
+    POLICY_VIOLATION_ONLY:  { label:'POLICY VIOLATION', color:'var(--accent-amber)',   lights:false }
+  };
+
+  var room = document.getElementById('room');
+  var camera = document.getElementById('camera');
+  var lampGlowEl = document.getElementById('lampGlowEl');
+  var vignetteEl = document.getElementById('vignetteEl');
+
+  // ui holds only presentation state; the server is the source of truth for
+  // score/tier/question/demeanor/tactic — this just mirrors the last response.
+  var ui = { score:0, tier:1, question:1, max:8 };
+  var sending = false;
+  var caseData = null;
+
+  function renderCamera(){
+    var t = TIERS[ui.tier-1];
+    var jx = 0, jy = 0;
+    if (!reducedMotion && ui.tier >= 4){
+      var amp = ui.tier === 5 ? 2.4 : 1.3;
+      jx = (Math.random()-0.5)*2*amp;
+      jy = (Math.random()-0.5)*2*amp;
+    }
+    camera.style.transform = 'translate(' + (t.cam.tx+jx) + 'px,' + (t.cam.ty+jy) + 'px) scale(' + t.cam.s + ')';
+  }
+
+  function tick(){
+    var t = TIERS[ui.tier-1];
+    if (!reducedMotion && t.flicker > 0){
+      var n = (Math.random()-0.5) * 2 * t.flicker;
+      lampGlowEl.setAttribute('opacity', Math.max(0.12, 0.55 + n).toFixed(2));
+    } else {
+      lampGlowEl.setAttribute('opacity', '0.55');
+    }
+    renderCamera();
+  }
+  setInterval(tick, 90);
+
+  function setScore(score){
+    ui.score = Math.max(0, score);
+    ui.tier = tierFromScore(ui.score);
+    var t = TIERS[ui.tier-1];
+    room.setAttribute('data-tier', ui.tier);
+    room.style.setProperty('--lamp-shade-color', t.lamp);
+    vignetteEl.style.opacity = t.vignette;
+    var pct = Math.max(4, Math.min(100, (ui.score / 100) * 100));
+    document.getElementById('tensionFill').style.height = pct + '%';
+    document.getElementById('tensionFill').style.background = t.barColor;
+    document.getElementById('scoreNum').textContent = ui.score;
+    document.getElementById('tierLabel').textContent = t.label;
+    renderCamera();
+    updateTStatus();
+  }
+
+  // Shows the real free-form investigation thread (GameState.last_move) —
+  // there's no tactic label to key body language off anymore, so this is
+  // read-only information, not something that drives a visual mapping.
+  function setThread(text){
+    var el = document.getElementById('hudThread');
+    el.textContent = text || 'opening question';
+    el.title = text || '';
+  }
+
+  function updateQuestionCount(count, max){
+    ui.question = count;
+    ui.max = max;
+    renderPips();
+    updateTStatus();
+  }
+
+  function renderPips(){
+    var wrap = document.getElementById('pips');
+    wrap.innerHTML = '';
+    for (var i = 1; i <= ui.max; i++){
+      var pip = document.createElement('i');
+      if (i <= ui.question) pip.className = 'on';
+      wrap.appendChild(pip);
+    }
+  }
+
+  function updateTStatus(){
+    document.getElementById('tStatus').textContent =
+      'Question ' + ui.question + '/' + ui.max + ' · ' + ui.score + ' pts';
+  }
+
+  function addDivider(turnLabel){
+    var scroll = document.getElementById('tScroll');
+    var div = document.createElement('div');
+    div.className = 't-divider';
+    div.textContent = turnLabel;
+    scroll.appendChild(div);
+  }
+
+  function flagHtml(tag, points){
+    return '<span class="t-flag">' + tag + ' <span class="pts">+' + points + ' pts</span></span>';
+  }
+
+  function addTranscriptRow(who, cls, text, onDone){
+    var scroll = document.getElementById('tScroll');
+    var row = document.createElement('div');
+    row.className = 't-row ' + cls;
+    row.innerHTML = (who ? '<span class="who">' + who + '</span>' : '') + '<span class="txt"></span>';
+    scroll.appendChild(row);
+    typeLine(row.querySelector('.txt'), text, cls === 'investigator', onDone);
+    scroll.scrollTop = scroll.scrollHeight;
+    return row;
+  }
+
+  function addSystemRow(text){
+    addTranscriptRow(null, 'system', '— ' + text + ' —');
+  }
+
+  // Dactilo (typewriter) clacks play only on the investigator's lines.
+  function typeLine(el, text, withSound, onDone){
+    var i = 0;
+    var rate = withSound ? 32 : 16;
+    var handle = setInterval(function(){
+      el.textContent = text.slice(0, i);
+      if (withSound && text[i-1] && text[i-1] !== ' ') playClack();
+      i++;
+      if (i > text.length){
+        clearInterval(handle);
+        if (withSound) playBell();
+        if (onDone) onDone();
+      }
+    }, rate);
+  }
+
+  function pinCard(tag, points, questionNum){
+    var board = document.getElementById('board');
+    var empty = board.querySelector('.empty-note');
+    if (empty) empty.remove();
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.style.transform = 'rotate(' + (Math.random()*10-5).toFixed(1) + 'deg)';
+    card.innerHTML = '<span class="pin"></span><span class="tag">' + tag + '</span><span class="turn">Q' + questionNum + ' · +' + points + '</span>';
+    board.appendChild(card);
+  }
+
+  function setSendingUI(isSending){
+    document.getElementById('answerInput').disabled = isSending;
+    var btn = document.getElementById('sendAnswerBtn');
+    btn.disabled = isSending;
+    btn.textContent = isSending ? 'Thinking…' : 'Send';
+  }
+
+  function sendAnswer(){
+    if (sending) return;
+    var input = document.getElementById('answerInput');
+    var text = input.value.trim();
+    if (!text) return;
+
+    ensureAudio();
+    sending = true;
+    setSendingUI(true);
+    var sentRow = addTranscriptRow('You', 'subject', text);
+    input.value = '';
+
+    fetch('/api/turn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer: text })
+    })
+      .then(function(r){
+        if (!r.ok){
+          return r.json()
+            .catch(function(){ return {}; })
+            .then(function(body){
+              throw new Error(body.detail || 'The investigator did not respond — try again.');
+            });
+        }
+        return r.json();
+      })
+      .then(function(data){ handleTurnResponse(data, sentRow); })
+      .catch(function(err){
+        addSystemRow(err.message || 'connection to the investigation engine failed — try again');
+      })
+      .finally(function(){
+        sending = false;
+        setSendingUI(false);
+      });
+  }
+
+  function handleTurnResponse(data, sentRow){
+    if (data.blocked){
+      addSystemRow(data.notice);
+      updateQuestionCount(data.question_count, data.max_questions);
+      return;
+    }
+
+    (data.findings || []).forEach(function(f){
+      sentRow.insertAdjacentHTML('beforeend', flagHtml(f.tag, f.points));
+      pinCard(f.tag, f.points, data.question_count);
+    });
+
+    setScore(data.score);
+    updateQuestionCount(data.question_count, data.max_questions);
+
+    if (data.findings && data.findings.length){
+      room.classList.remove('shake'); void room.offsetWidth; room.classList.add('shake');
+      var flash = document.getElementById('flash');
+      flash.classList.remove('hit'); void flash.offsetWidth; flash.classList.add('hit');
+    }
+
+    if (!data.ended){
+      setThread(data.thread);
+      addDivider('Turn ' + data.question_count);
+    }
+
+    addTranscriptRow('Investigator', 'investigator', data.next_line, function(){
+      if (data.ended){
+        setTimeout(function(){
+          populateResolution(data.resolution);
+          showScreen('resolution');
+        }, 500);
+      }
+    });
+  }
+
+  function populateResolution(res){
+    var v = VERDICT_LOOKS[res.outcome] || VERDICT_LOOKS.NOT_PROVEN;
+
+    document.getElementById('finalScore').textContent = res.final_score;
+    document.getElementById('finalThreshold').textContent = res.threshold;
+    document.getElementById('aftermathText').textContent = res.aftermath;
+
+    var stamp = document.getElementById('verdictStamp');
+    stamp.style.setProperty('--verdict-color', v.color);
+    stamp.textContent = v.label;
+    stamp.style.animation = 'none'; void stamp.offsetWidth; stamp.style.animation = '';
+
+    var card = document.getElementById('resolutionScreen');
+    card.classList.remove('impact'); void card.offsetWidth; card.classList.add('impact');
+
+    var lights = document.getElementById('copLights');
+    lights.classList.remove('on');
+    if (v.lights && !reducedMotion){
+      void lights.offsetWidth;
+      lights.classList.add('on');
+    }
+  }
+
+  // ---------- Screens ----------
+  var briefing = document.getElementById('briefingScreen');
+  var interview = document.getElementById('interviewScreen');
+  var resolution = document.getElementById('resolutionScreen');
+  var toggle = document.getElementById('screenToggle');
+  var current = 'briefing';
+
+  function showScreen(name){
+    current = name;
+    briefing.hidden = name !== 'briefing';
+    interview.hidden = name !== 'interview';
+    resolution.hidden = name !== 'resolution';
+    toggle.textContent = (name === 'briefing') ? 'View interview room →' : '← View case file';
+    var target = name === 'briefing' ? briefing : (name === 'interview' ? interview : resolution);
+    requestAnimationFrame(function(){
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  function renderBriefing(data){
+    caseData = data;
+
+    document.getElementById('pageLede').textContent =
+      'A real interview, driven by the multi-agent pipeline — every question and every finding below comes from a live run.';
+    document.getElementById('scenarioLabel').textContent = 'Internal Investigation · ' + data.scenario_type;
+    document.getElementById('scenarioLabelResolution').textContent = 'Internal Investigation · ' + data.scenario_type;
+    document.getElementById('caseTitle').textContent = 'Case File';
+    document.getElementById('resolutionTitle').textContent = 'Resolution';
+    document.getElementById('personaLine').textContent = 'Interviewer: ' + data.persona_line;
+    document.getElementById('resolutionPersonaLine').textContent = data.persona_line;
+
+    var facts = document.getElementById('suspectFacts');
+    facts.innerHTML = '';
+    data.suspect_facts.forEach(function(f){
+      var li = document.createElement('li');
+      li.textContent = f;
+      facts.appendChild(li);
+    });
+
+    var objects = document.getElementById('roomObjects');
+    objects.innerHTML = '';
+    data.room_objects.concat(data.present_people).forEach(function(o){
+      var li = document.createElement('li');
+      li.textContent = o.charAt(0).toUpperCase() + o.slice(1) + '.';
+      objects.appendChild(li);
+    });
+
+    document.getElementById('objectiveText').textContent = data.objective;
+    document.getElementById('openingQuoteText').textContent = '“' + data.opening_question + '”';
+
+    document.getElementById('hudCaseLabel').textContent = data.scenario_type.toUpperCase() + ' · INTERVIEW FEED';
+
+    document.getElementById('screenToggle').disabled = false;
+    document.getElementById('beginBtn').disabled = false;
+  }
+
+  function startTranscript(){
+    document.getElementById('tScroll').innerHTML = '';
+    document.getElementById('board').innerHTML = '<span class="empty-note">— nothing pinned yet —</span>';
+    setScore(0);
+    setThread(null);
+    updateQuestionCount(1, caseData.max_questions);
+    addDivider('Turn 1');
+    addTranscriptRow('Investigator', 'investigator', caseData.opening_question);
+    requestAnimationFrame(function(){
+      document.querySelector('.transcript-panel').scrollIntoView({ behavior:'smooth', block:'start' });
+    });
+  }
+
+  function loadCase(){
+    return fetch('/api/start', { method: 'POST' })
+      .then(function(r){ return r.json(); })
+      .then(renderBriefing)
+      .catch(function(){
+        document.getElementById('pageLede').textContent =
+          'Could not reach the game server. Make sure server.py is running (python server.py) and reload this page.';
+      });
+  }
+
+  document.getElementById('beginBtn').addEventListener('click', function(){
+    ensureAudio();
+    showScreen('interview');
+    startTranscript();
+  });
+
+  document.getElementById('restartBtn').addEventListener('click', function(){
+    loadCase().then(function(){
+      showScreen('interview');
+      startTranscript();
+    });
+  });
+
+  document.getElementById('backToFileBtn').addEventListener('click', function(){ showScreen('briefing'); });
+
+  toggle.addEventListener('click', function(){
+    showScreen(current === 'briefing' ? 'interview' : 'briefing');
+  });
+
+  document.getElementById('soundBtn').addEventListener('click', function(){
+    soundOn = !soundOn;
+    this.textContent = (soundOn ? '🔊' : '🔇') + ' Sound';
+    if (soundOn) ensureAudio();
+  });
+
+  document.getElementById('sendAnswerBtn').addEventListener('click', sendAnswer);
+  document.getElementById('answerInput').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') sendAnswer();
+  });
+
+  loadCase();
+})();
+</script>
+</body>
+</html>
