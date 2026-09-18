@@ -27,6 +27,7 @@ from main import (
     format_player_briefing,
     load_case,
     opening_question,
+    reset_debug_log,
     run_turn,
 )
 
@@ -77,6 +78,10 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.new:
+        # main.py resets the debug log when its CLI starts, but anything that
+        # calls run_turn directly (this harness, the web server) never did, so
+        # the file just grew across every run — it had reached 16MB.
+        reset_debug_log()
         case = load_case(args.case)
         state = GameState(case=case)
         question = opening_question(case)

@@ -5,3 +5,4 @@ __pycache__/
 venv/
 .gradio/
 playtest_out/
+game_debug_log.txt
