@@ -10,9 +10,25 @@ the Gradio Blocks object below is a required-but-unused placeholder, pushed
 to /gradio where nobody will look. No Gradio UI code is otherwise involved —
 the room, the transcript, the sound, all of it is server.py + web/index.html
 exactly as they run locally.
+
+The account's free hardware tier is ZeroGPU, not CPU Basic (downgrading
+needs Pro). ZeroGPU refuses to start any app that has zero @spaces.GPU
+functions, even though this app does no local GPU work at all — every
+"thinking" step is a remote call to the Gemini API. _keepalive below exists
+purely to satisfy that startup check; it is never called.
 """
 
 import gradio as gr
+
+try:
+    import spaces
+
+    @spaces.GPU
+    def _keepalive():
+        return None
+except ImportError:
+    # Not running on a ZeroGPU Space (e.g. local dev) — nothing to satisfy.
+    pass
 
 from server import app as fastapi_app
 
