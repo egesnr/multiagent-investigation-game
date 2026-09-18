@@ -140,6 +140,16 @@ compare it against known_claims and set status:
   (e.g. suspect changes their account of what happened).
 Judge by meaning, not exact wording.
 
+Denials are where this matters most, and where it is most often got wrong.
+"I didn't do anything wrong", "I dispute the premise", "that's not accurate",
+"I reject that characterisation", "nothing you've described happened" are all
+THE SAME ASSERTION — that no wrongdoing occurred — dressed in different words.
+Once that denial is on record, every later restatement of it is REITERATED, no
+matter how the sentence is built. Only mark a denial NEW when it denies
+something genuinely different (denying a meeting took place is not the same
+assertion as denying the amount is wrong). A suspect must not accrue fresh
+findings simply for saying "no" in eight different ways.
+
 RULE 4 — ADMISSION VS. DEFENSE SEPARATION:
 For every claim, set is_defense:
 - is_defense=false: a plain, undisputed factual admission (what happened).
@@ -152,6 +162,30 @@ defenses still belong in claims so they can be verified.
 
 Statements with no factual content at all (pure opinion, denial of intent framed
 as character, emotional appeals) go in new_defenses instead of claims.
+
+RULE 4a — A DENIAL OF THE ALLEGATION IS A CHECKABLE CLAIM:
+"I did nothing wrong", "there was no discrepancy", "I have no knowledge of
+any irregularity" are not empty rhetoric — each asserts something about the
+world or about what the suspect knew, and evidence can bear on it. Extract
+them as claims with checkable=true and is_defense=true, phrased as what they
+actually assert ("the suspect asserts no policy breach occurred in connection
+with the transaction", "the suspect asserts they were unaware of any
+irregularity"). Do not discard them as opinion. An innocent suspect loses
+nothing by this: if the evidence does not contradict the denial, it simply
+stays unverified.
+This does not apply to pure refusals with no assertion in them ("no comment",
+"I'm not answering"), which remain non-claims.
+
+RULE 4b — CONDUCT IN THE ROOM IS ITSELF A FACT:
+How the suspect behaves toward the investigator is not rhetoric to be
+discarded — it is something that observably happened, in the transcript, and
+policy may bear on it. If the suspect directs abuse, threats, insults or
+personal attacks at the investigator, extract that as its own claim, stated
+plainly and without repeating the slur ("the suspect directed personal abuse
+at the investigator when asked about the transaction"), with checkable=true.
+This is narrow: ordinary anger, frustration, or a blunt refusal to answer is
+NOT abuse and must not be extracted this way. Only genuine hostility directed
+at the investigator personally.
 
 RULE 5 — LITERAL ATTRIBUTION UNDER AMBIGUITY:
 If a claim's agent, referent, or meaning could reasonably be read more than one

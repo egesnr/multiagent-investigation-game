@@ -8,7 +8,8 @@
     "24-Hour Reporting Policy: Any suspected billing error, unauthorized charge, or material transaction issue over $200 must be reported to Finance or the card issuer within 24 hours of the cardholder becoming aware of it.",
     "Individual Meal Cap: Non-client individual meals on business trips are capped at $75 USD per day unless an approved exception exists on file before the trip.",
     "Concealment Clause: Failing to disclose a known discrepancy on one's own card, once aware of it, is itself a reportable conduct issue independent of whether the underlying charge is ultimately found to be valid.",
-    "Duty to Cooperate: Employees must give a substantive account when directly asked about a specific, documented discrepancy on their own corporate card during an internal investigation. Refusing to engage with a specific, repeated inquiry is treated as an adverse conduct signal in the final assessment, separate from whatever the underlying transaction turns out to be."
+    "Duty to Cooperate: Employees must give a substantive account when directly asked about a specific, documented discrepancy on their own corporate card during an internal investigation. Refusing to engage with a specific, repeated inquiry is treated as an adverse conduct signal in the final assessment, separate from whatever the underlying transaction turns out to be.",
+    "Professional Conduct: Employees must engage with an internal investigation civilly. Abuse, threats, or personal attacks directed at the investigator during the interview are a separate conduct violation, assessed independently of whatever the underlying transaction turns out to be."
   ],
   "facts": [
     {
@@ -17,7 +18,10 @@
       "true_value": "true",
       "weight": "high",
       "certainty": "fast",
-      "visible_to": ["suspect", "investigator_start"]
+      "visible_to": [
+        "suspect",
+        "investigator_start"
+      ]
     },
     {
       "id": "no_client_meeting",
@@ -25,7 +29,9 @@
       "true_value": "true",
       "weight": "high",
       "certainty": "fast",
-      "visible_to": ["suspect"]
+      "visible_to": [
+        "suspect"
+      ]
     },
     {
       "id": "no_calendar_entry",
@@ -33,7 +39,10 @@
       "true_value": "true",
       "weight": "medium",
       "certainty": "fast",
-      "visible_to": ["suspect", "investigator_start"]
+      "visible_to": [
+        "suspect",
+        "investigator_start"
+      ]
     },
     {
       "id": "actual_amount",
@@ -41,7 +50,10 @@
       "true_value": "$3,200",
       "weight": "high",
       "certainty": "fast",
-      "visible_to": ["suspect", "investigator_start"]
+      "visible_to": [
+        "suspect",
+        "investigator_start"
+      ]
     },
     {
       "id": "no_supporting_documentation",
@@ -49,7 +61,9 @@
       "true_value": "true",
       "weight": "high",
       "certainty": "fast",
-      "visible_to": ["investigator_start"]
+      "visible_to": [
+        "investigator_start"
+      ]
     },
     {
       "id": "no_prior_issue_report",
@@ -57,7 +71,9 @@
       "true_value": "true",
       "weight": "high",
       "certainty": "fast",
-      "visible_to": ["investigator_start"]
+      "visible_to": [
+        "investigator_start"
+      ]
     },
     {
       "id": "flagged_by_routine_audit",
@@ -65,7 +81,9 @@
       "true_value": "true",
       "weight": "medium",
       "certainty": "fast",
-      "visible_to": ["investigator_start"]
+      "visible_to": [
+        "investigator_start"
+      ]
     },
     {
       "id": "trip_approved",
@@ -73,7 +91,10 @@
       "true_value": "true",
       "weight": "low",
       "certainty": "fast",
-      "visible_to": ["suspect", "investigator_start"]
+      "visible_to": [
+        "suspect",
+        "investigator_start"
+      ]
     },
     {
       "id": "dinner_within_trip_window",
@@ -81,7 +102,10 @@
       "true_value": "true",
       "weight": "medium",
       "certainty": "fast",
-      "visible_to": ["suspect", "investigator_start"]
+      "visible_to": [
+        "suspect",
+        "investigator_start"
+      ]
     },
     {
       "id": "colleague_on_trip",
@@ -89,7 +113,9 @@
       "true_value": "true",
       "weight": "medium",
       "certainty": "fast",
-      "visible_to": ["investigator_start"]
+      "visible_to": [
+        "investigator_start"
+      ]
     },
     {
       "id": "true_reason",
@@ -97,7 +123,9 @@
       "true_value": "true",
       "weight": "medium",
       "certainty": "fast",
-      "visible_to": ["suspect"]
+      "visible_to": [
+        "suspect"
+      ]
     },
     {
       "id": "itemized_bill_content",
@@ -129,5 +157,9 @@
     "a printed copy of the corporate card statement for the trip",
     "a printed copy of the expense policy handbook, meal-cap section tabbed"
   ],
-  "present_people": ["suspect", "investigator", "an HR representative taking notes, not speaking"]
+  "present_people": [
+    "suspect",
+    "investigator",
+    "an HR representative taking notes, not speaking"
+  ]
 }

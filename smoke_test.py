@@ -58,7 +58,10 @@ delta, state = process_turn_scoring([mis_tagged_unverified], state)
 assert delta == 0
 assert state.score == before
 
-# A high-value unsupported defense gets 0 arrest points but is parked for verification.
+# A high-value unsupported defense scores provisional suspicion and is parked for
+# verification. It used to score nothing, which made a careful liar strictly better
+# off than an honest suspect — every excuse that couldn't be disproven on the spot
+# was free. The points come back off in resolution if the claim checks out true.
 future = CheckResult(
     quoted_evidence="The restaurant added an extra zero.",
     rationale="Concrete defense that requires merchant-side verification.",
@@ -73,10 +76,29 @@ future = CheckResult(
 )
 before = state.score
 delta, state = process_turn_scoring([future], state)
-assert delta == 0
-assert state.score == before
+assert delta == 8, f"high-value unsupported defense should raise suspicion, got {delta}"
+assert state.score == before + 8
+assert state.provisional_findings["The restaurant added an extra zero."] == 8, (
+    "provisional points must be recorded per claim so resolution can refund them"
+)
 assert state.last_turn_usefulness == "high_future_value"
 assert "restaurant amount-entry error" in state.case_log.parked_threads
+
+# Background chatter that happens to be unverified must still score nothing —
+# suspicion attaches to excuses the suspect cannot back up, not to small talk.
+chatter = CheckResult(
+    quoted_evidence="I flew in on the Tuesday.",
+    rationale="Ordinary background detail, nothing bears on it.",
+    basis=FindingBasis.UNRESOLVED,
+    investigator_visible=True,
+    verification_status=ClaimStatus.UNVERIFIED,
+    claim_type=ClaimType.BACKGROUND,
+    strategic_value="high",
+)
+before = state.score
+delta, state = process_turn_scoring([chatter], state)
+assert delta == 0, f"unverified background must not score, got {delta}"
+assert state.score == before
 
 # Sustained stonewalling (empty/evasive turns, i.e. no extracted claims at
 # all) must eventually cost points under the Duty to Cooperate policy —

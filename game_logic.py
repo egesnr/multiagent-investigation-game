@@ -9,6 +9,7 @@ from models import (
     CheckResult,
     ClaimRecord,
     ClaimStatus,
+    ClaimType,
     EvidentiaryImpact,
     FindingBasis,
     FutureVerificationValue,
@@ -43,6 +44,12 @@ IMPACT_POINTS = {
 # refusals don't even produce an extracted claim for that flag to attach to.
 STONEWALL_STREAK_LENGTH = 3
 STONEWALL_PENALTY = 12
+
+# An unverified defense the suspect cannot substantiate raises suspicion even
+# though nothing is proven yet. Scaled by how central the Checker judged the
+# claim: an unsupported excuse about the core allegation counts, idle detail
+# does not. Refunded by resolution if the claim is later confirmed true.
+PROVISIONAL_POINTS = {"high": 8, "medium": 5, "low": 0}
 
 
 def apply_tier(score: int) -> int:
@@ -180,8 +187,13 @@ def calculate_claim_score(result: CheckResult, state: GameState) -> tuple[int, s
     """
     Convert the Checker's semantic evidentiary impact into deterministic points.
 
-    Unverified claims get zero arrest points even if they are strategically valuable.
-    They remain useful through future_verification_value and the case log.
+    An unverified claim scores no established points, but an unverified
+    *defense* scores provisional suspicion — see PROVISIONAL_POINTS. Testing
+    showed a careful liar was strictly better off than an honest suspect:
+    every excuse he could not be caught on scored exactly zero, so six
+    fabrications left him on 16 points while a man who admitted everything
+    sat on 72. Suspicion now goes on the board when an excuse cannot be
+    backed up, and resolution refunds it if the claim later checks out true.
     """
     if not result.investigator_visible:
         return 0, None
@@ -189,7 +201,19 @@ def calculate_claim_score(result: CheckResult, state: GameState) -> tuple[int, s
     status = _effective_status(result)
 
     if status == ClaimStatus.UNVERIFIED:
-        return 0, None
+        if result.claim_type != ClaimType.DEFENSE:
+            return 0, None
+        points = PROVISIONAL_POINTS.get(result.strategic_value, 0)
+        if points <= 0:
+            return 0, None
+        key = _claim_key(result)
+        if key in state.scored_findings:
+            return 0, None
+        state.scored_findings.append(key)
+        # Recorded per-claim so resolution can take it back off the board if
+        # the claim turns out to be true.
+        state.provisional_findings[result.quoted_evidence.strip()] = points
+        return points, f"unverified defense, provisional suspicion (+{points})"
 
     points = IMPACT_POINTS[result.evidentiary_impact]
     if points <= 0:
@@ -204,7 +228,17 @@ def calculate_claim_score(result: CheckResult, state: GameState) -> tuple[int, s
 
 
 def _turn_usefulness(results: list[CheckResult], delta: int) -> str:
-    if delta > 0:
+    # Only points from an *established* finding count as new evidence. A turn
+    # whose whole gain was provisional suspicion on an unsupported excuse has
+    # not proven anything, and telling the Strategist otherwise would have it
+    # believe a move landed hard evidence when it merely noted a story nobody
+    # can check yet.
+    established = any(
+        _effective_status(r) != ClaimStatus.UNVERIFIED
+        and IMPACT_POINTS[r.evidentiary_impact] > 0
+        for r in results
+    )
+    if established and delta > 0:
         return "new_evidence"
     if any(r.future_verification_value == FutureVerificationValue.HIGH for r in results):
         return "high_future_value"

@@ -19,6 +19,7 @@ Usage:
 """
 
 import json
+import re
 import statistics
 import sys
 from pathlib import Path
@@ -97,6 +98,75 @@ def target_overlap(move_history: list[str]) -> list[tuple[int, int, float]]:
     return hits
 
 
+def unsourced_claims(state: dict) -> list[str]:
+    """Grounding entries that cite a known fact which does not exist.
+
+    The Speaker names a source for each specific claim it makes, but nothing
+    stops it inventing the source along with the claim — observed live, it
+    asserted "no follow-up email or meeting notes in the three weeks after
+    the dinner" and labelled that "known fact" when no such fact is authored.
+    This compares each such citation against the real investigator-visible
+    facts. Word overlap is deliberately coarse: this only flags entries for a
+    human to read, it never changes what the game does.
+    """
+    facts = [
+        f"{f.get('description','')} {f.get('true_value','')}"
+        for f in state.get("case", {}).get("facts", [])
+        if "investigator_start" in f.get("visible_to", [])
+    ]
+    fact_word_sets = [{w for w in _words(f) if len(w) > 3} for f in facts]
+
+    suspicious = []
+    for turn in state.get("grounding_history", []):
+        for entry in turn:
+            if "known fact" not in entry.lower():
+                continue
+            claim_words = {w for w in _words(entry) if len(w) > 3}
+            claim_words -= {"known", "fact"}
+            if not claim_words:
+                continue
+            best = max(
+                (len(claim_words & fw) / len(claim_words) for fw in fact_word_sets),
+                default=0.0,
+            )
+            if best < 0.5:
+                suspicious.append(f"{entry}  [best match {best:.0%}]")
+    return suspicious
+
+
+_NUMERIC = re.compile(r"\b\d[\d,:.]*\b")
+
+
+def uncited_specifics(state: dict) -> list[str]:
+    """Numbers and times in a spoken line that appear nowhere in its sources.
+
+    The Speaker names its sources before writing, but nothing forces the line
+    to stay inside them. Observed live: it cited three genuine known facts and
+    then told the suspect the charge landed "at 8:14 PM", a time that exists
+    nowhere in the case. Citations were real; the sentence still invented a
+    detail. Numbers are checked because they are unambiguous and are exactly
+    where fabricated precision shows up.
+    """
+    facts_blob = " ".join(
+        f"{f.get('description','')} {f.get('true_value','')}"
+        for f in state.get("case", {}).get("facts", [])
+    )
+    lines = investigator_lines(state)
+    grounding = state.get("grounding_history", [])
+
+    flagged = []
+    for i, line in enumerate(lines):
+        sources = " ".join(grounding[i]) if i < len(grounding) else ""
+        allowed = f"{sources} {facts_blob}"
+        allowed_nums = set(_NUMERIC.findall(allowed.replace(",", "")))
+        for token in set(_NUMERIC.findall(line.replace(",", ""))):
+            if len(token) < 3:
+                continue  # skip small counts like "1" or "20" that recur harmlessly
+            if token not in allowed_nums:
+                flagged.append(f'turn {i + 1}: "{token}" not in any cited source')
+    return flagged
+
+
 def report(path: Path) -> None:
     payload = json.loads(path.read_text(encoding="utf-8"))
     state = payload["state"]
@@ -114,6 +184,14 @@ def report(path: Path) -> None:
     print(f"line length        : mean {mean_len:.1f} words, spread {spread:.1f}")
     overlaps = target_overlap(state.get("move_history", []))
     print(f"similar targets    : {len(overlaps)} pair(s) {overlaps or ''}")
+    bad = unsourced_claims(state)
+    print(f"invented citations : {len(bad)}")
+    for entry in bad:
+        print(f"                     ! {entry}")
+    loose = uncited_specifics(state)
+    print(f"uncited numbers    : {len(loose)}")
+    for entry in loose:
+        print(f"                     ! {entry}")
 
 
 if __name__ == "__main__":
