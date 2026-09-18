@@ -176,7 +176,16 @@ FULL INTERNAL CASE LOG:
 
 
 def _verification_delta(verifications: list[VerificationResult]) -> int:
-    """Only newly disproved pending claims add post-interview incriminating points."""
+    """Post-interview incriminating value, from disproved defenses AND from
+    facts the records confirm outright.
+
+    Counting only disproofs meant a suspect who advanced no defense could not
+    be scored at all, since there was nothing to disprove — pure denial was
+    unbeatable regardless of what the evidence showed. Anything that did not
+    establish something still contributes nothing: INCONCLUSIVE and
+    NOT_MATERIAL have their impact forced to none before this runs, and an
+    exculpatory confirmation carries none by the prompt's own rubric.
+    """
     seen: set[str] = set()
     total = 0
     for result in verifications:
@@ -184,7 +193,7 @@ def _verification_delta(verifications: list[VerificationResult]) -> int:
         if key in seen:
             continue
         seen.add(key)
-        if result.status == VerificationStatus.DISPROVED:
+        if result.status in (VerificationStatus.DISPROVED, VerificationStatus.CONFIRMED):
             total += IMPACT_POINTS[result.evidentiary_impact]
     return total
 
@@ -230,8 +239,17 @@ def run_resolution(state: GameState) -> ResolutionReport:
     # given call. Force it here so a CONFIRMED or INCONCLUSIVE verification
     # can never carry a nonzero evidentiary_impact regardless of what the LLM
     # produced — only a DISPROVED verification is allowed to matter.
+    # INCONCLUSIVE and NOT_MATERIAL establish nothing, so they can never carry
+    # weight. CONFIRMED is deliberately allowed through: a suspect who mounts
+    # no defense at all offers nothing to disprove, and zeroing confirmations
+    # too made pure denial structurally unbeatable — a scripted suspect who
+    # denied everything for eight turns finished on 24/80 even though the
+    # verification stage explicitly confirmed he had committed intentional
+    # wrongdoing. The prompt already restricts impact to NEW incriminating
+    # value ("confirming an innocent/exculpatory defense => none"), so an
+    # exculpatory confirmation still scores zero on its own terms.
     for v in verifications:
-        if v.status != VerificationStatus.DISPROVED:
+        if v.status in (VerificationStatus.INCONCLUSIVE, VerificationStatus.NOT_MATERIAL):
             v.evidentiary_impact = EvidentiaryImpact.NONE
 
     # Code-side backstop for the same rule the prompt states above: even if

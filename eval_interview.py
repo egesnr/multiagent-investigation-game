@@ -19,6 +19,7 @@ Usage:
 """
 
 import json
+import re
 import statistics
 import sys
 from pathlib import Path
@@ -133,6 +134,39 @@ def unsourced_claims(state: dict) -> list[str]:
     return suspicious
 
 
+_NUMERIC = re.compile(r"\b\d[\d,:.]*\b")
+
+
+def uncited_specifics(state: dict) -> list[str]:
+    """Numbers and times in a spoken line that appear nowhere in its sources.
+
+    The Speaker names its sources before writing, but nothing forces the line
+    to stay inside them. Observed live: it cited three genuine known facts and
+    then told the suspect the charge landed "at 8:14 PM", a time that exists
+    nowhere in the case. Citations were real; the sentence still invented a
+    detail. Numbers are checked because they are unambiguous and are exactly
+    where fabricated precision shows up.
+    """
+    facts_blob = " ".join(
+        f"{f.get('description','')} {f.get('true_value','')}"
+        for f in state.get("case", {}).get("facts", [])
+    )
+    lines = investigator_lines(state)
+    grounding = state.get("grounding_history", [])
+
+    flagged = []
+    for i, line in enumerate(lines):
+        sources = " ".join(grounding[i]) if i < len(grounding) else ""
+        allowed = f"{sources} {facts_blob}"
+        allowed_nums = set(_NUMERIC.findall(allowed.replace(",", "")))
+        for token in set(_NUMERIC.findall(line.replace(",", ""))):
+            if len(token) < 3:
+                continue  # skip small counts like "1" or "20" that recur harmlessly
+            if token not in allowed_nums:
+                flagged.append(f'turn {i + 1}: "{token}" not in any cited source')
+    return flagged
+
+
 def report(path: Path) -> None:
     payload = json.loads(path.read_text(encoding="utf-8"))
     state = payload["state"]
@@ -153,6 +187,10 @@ def report(path: Path) -> None:
     bad = unsourced_claims(state)
     print(f"invented citations : {len(bad)}")
     for entry in bad:
+        print(f"                     ! {entry}")
+    loose = uncited_specifics(state)
+    print(f"uncited numbers    : {len(loose)}")
+    for entry in loose:
         print(f"                     ! {entry}")
 
 
