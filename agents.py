@@ -43,7 +43,7 @@ from models import (
 
 load_dotenv()
 
-MODEL_NAME = os.environ.get("GAME_MODEL", "gemini-3.1-flash-lite")
+MODEL_NAME = os.environ.get("GAME_MODEL", "gemini-3.1-flash")
 
 
 def get_llm(temperature: float = 0.3):
