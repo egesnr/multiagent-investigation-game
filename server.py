@@ -19,8 +19,11 @@ engine (see commit 34e228d) for good, measured reasons; this does not
 reintroduce anything like them, even for display purposes.
 """
 
+import logging
 import uuid
 from pathlib import Path
+
+logger = logging.getLogger("uvicorn.error")
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
@@ -135,15 +138,19 @@ def turn(payload: TurnRequest, request: Request):
     before_count = state.question_count
     try:
         state, next_line = run_turn(state, last_question, payload.answer)
-    except Exception:
+    except Exception as exc:
         # A turn runs ~7 sequential LLM calls; llm_utils already retries
-        # transient failures internally, but a free-tier quota that's still
-        # exhausted after all retries has no better move than to say so
-        # plainly and leave state untouched — the question wasn't consumed.
+        # transient failures internally, but anything that still fails after
+        # all retries has no better move than to say so plainly and leave
+        # state untouched — the question wasn't consumed. Log the real
+        # exception (type + message) so a misconfigured key or a genuine
+        # rate limit can be told apart from Render's logs, instead of both
+        # showing the same generic message to the player.
+        logger.error("Turn failed: %s: %s", type(exc).__name__, exc)
         raise HTTPException(
             503,
-            "The investigator's line is jammed right now (the model API is "
-            "rate-limited or unavailable) — wait a moment and send your "
+            "The investigator's line is jammed right now (the model API "
+            f"raised {type(exc).__name__}) — wait a moment and send your "
             "answer again.",
         )
     session["state"] = state
