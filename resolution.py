@@ -54,7 +54,7 @@ class NarrativeDraft(BaseModel):
 
 
 load_dotenv()
-MODEL_NAME = os.environ.get("GAME_MODEL", "gemini-3.1-flash")
+MODEL_NAME = os.environ.get("GAME_MODEL", "gemini-3.1-flash-lite")
 
 
 IMPACT_POINTS = {

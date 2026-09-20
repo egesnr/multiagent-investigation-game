@@ -20,6 +20,7 @@ reintroduce anything like them, even for display purposes.
 """
 
 import logging
+import threading
 import uuid
 from pathlib import Path
 
@@ -44,6 +45,17 @@ app = FastAPI()
 # session_id -> {"state": GameState, "last_question": str}. Process-local,
 # not shared across workers/replicas — this app must run as a single process.
 _sessions: dict[str, dict] = {}
+
+# job_id -> {"status": "pending" | "done" | "error", "result"/"detail": ...}.
+# A turn runs ~7 sequential LLM calls and can genuinely take over a minute —
+# longer than some hosts' front-end proxy will hold a request open (observed
+# on Render: the connection gets dropped well before the backend finishes,
+# even though the backend itself never errors). So /api/turn doesn't block:
+# it starts the work in a background thread and returns a job id right away;
+# the frontend polls /api/turn/{job_id} until it's done. Each individual
+# HTTP request completes in well under a second either way, so no proxy's
+# timeout — known or not — is ever in play.
+_jobs: dict[str, dict] = {}
 
 
 class TurnRequest(BaseModel):
@@ -129,42 +141,50 @@ def start(response: Response):
     }
 
 
-@app.post("/api/turn")
-def turn(payload: TurnRequest, request: Request):
-    session = _get_session(request)
+def _process_turn(session_id: str, session: dict, answer: str, job_id: str) -> None:
+    """Runs the real turn (all ~7 LLM calls) on a background thread. Never
+    raises — any failure is recorded on the job instead, since there's no
+    HTTP request left by the time this finishes to raise an exception into."""
     state = session["state"]
     last_question = session["last_question"]
-
     before_count = state.question_count
+
     try:
-        state, next_line = run_turn(state, last_question, payload.answer)
+        state, next_line = run_turn(state, last_question, answer)
     except Exception as exc:
-        # A turn runs ~7 sequential LLM calls; llm_utils already retries
-        # transient failures internally, but anything that still fails after
-        # all retries has no better move than to say so plainly and leave
-        # state untouched — the question wasn't consumed. Log the real
-        # exception (type + message) so a misconfigured key or a genuine
-        # rate limit can be told apart from Render's logs, instead of both
-        # showing the same generic message to the player.
+        # llm_utils already retries transient failures internally; anything
+        # that still fails after all retries has no better move than to say
+        # so plainly and leave state untouched — the question wasn't
+        # consumed. Log the real exception (type + message) so a
+        # misconfigured key or a genuine rate limit can be told apart from
+        # Render's logs, instead of both showing the same generic message.
         logger.error("Turn failed: %s: %s", type(exc).__name__, exc)
-        raise HTTPException(
-            503,
-            "The investigator's line is jammed right now (the model API "
-            f"raised {type(exc).__name__}) — wait a moment and send your "
-            "answer again.",
-        )
+        _jobs[job_id] = {
+            "status": "error",
+            "detail": (
+                "The investigator's line is jammed right now (the model "
+                f"API raised {type(exc).__name__}) — wait a moment and "
+                "send your answer again."
+            ),
+        }
+        return
+
     session["state"] = state
 
     # A pure blocked world action doesn't consume the question — the same
     # question stands and nothing else in the room state changes. See
     # main.run_turn and app.py's equivalent check.
     if state.question_count == before_count and state.last_world_notice:
-        return {
-            "blocked": True,
-            "notice": state.last_world_notice,
-            "question_count": state.question_count,
-            "max_questions": state.max_questions,
+        _jobs[job_id] = {
+            "status": "done",
+            "result": {
+                "blocked": True,
+                "notice": state.last_world_notice,
+                "question_count": state.question_count,
+                "max_questions": state.max_questions,
+            },
         }
+        return
 
     session["last_question"] = next_line
 
@@ -173,7 +193,7 @@ def turn(payload: TurnRequest, request: Request):
         or case_decisively_resolved(state)
     )
 
-    response = {
+    result = {
         "blocked": False,
         "question_count": state.question_count,
         "max_questions": state.max_questions,
@@ -188,15 +208,46 @@ def turn(payload: TurnRequest, request: Request):
 
     if ended:
         report = run_resolution(state)
-        response["resolution"] = {
+        result["resolution"] = {
             "outcome": report.outcome.value,
             "aftermath": report.aftermath,
             "final_score": report.final_score,
             "threshold": state.case.arrest_threshold,
         }
-        del _sessions[request.cookies[SESSION_COOKIE]]
+        del _sessions[session_id]
 
-    return response
+    _jobs[job_id] = {"status": "done", "result": result}
+
+
+@app.post("/api/turn")
+def turn(payload: TurnRequest, request: Request):
+    session_id = request.cookies.get(SESSION_COOKIE)
+    session = _get_session(request)
+
+    job_id = uuid.uuid4().hex
+    _jobs[job_id] = {"status": "pending"}
+    threading.Thread(
+        target=_process_turn,
+        args=(session_id, session, payload.answer, job_id),
+        daemon=True,
+    ).start()
+
+    return {"job_id": job_id}
+
+
+@app.get("/api/turn/{job_id}")
+def turn_status(job_id: str):
+    job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Unknown or already-collected job.")
+
+    if job["status"] == "pending":
+        return {"status": "pending"}
+
+    del _jobs[job_id]
+    if job["status"] == "error":
+        raise HTTPException(503, job["detail"])
+    return job["result"]
 
 
 if __name__ == "__main__":

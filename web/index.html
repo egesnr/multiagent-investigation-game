@@ -997,6 +997,13 @@
     btn.textContent = isSending ? 'Thinking…' : 'Send';
   }
 
+  // A turn runs ~7 sequential LLM calls and can take over a minute — longer
+  // than some hosts hold a single request open (seen in practice on Render:
+  // the connection drops before the backend, which never errors, finishes).
+  // So this doesn't wait on one long request: it kicks the turn off, gets a
+  // job id back immediately, and polls a short-lived status endpoint until
+  // the job is done. Every individual request completes in well under a
+  // second, so no host's timeout — known or not — is ever in play.
   function sendAnswer(){
     if (sending) return;
     var input = document.getElementById('answerInput');
@@ -1015,6 +1022,20 @@
       body: JSON.stringify({ answer: text })
     })
       .then(function(r){
+        if (!r.ok) throw new Error('Could not reach the investigation engine — try again.');
+        return r.json();
+      })
+      .then(function(data){ pollTurn(data.job_id, sentRow); })
+      .catch(function(err){
+        addSystemRow(err.message || 'connection to the investigation engine failed — try again');
+        sending = false;
+        setSendingUI(false);
+      });
+  }
+
+  function pollTurn(jobId, sentRow){
+    fetch('/api/turn/' + jobId)
+      .then(function(r){
         if (!r.ok){
           return r.json()
             .catch(function(){ return {}; })
@@ -1024,11 +1045,17 @@
         }
         return r.json();
       })
-      .then(function(data){ handleTurnResponse(data, sentRow); })
+      .then(function(data){
+        if (data.status === 'pending'){
+          setTimeout(function(){ pollTurn(jobId, sentRow); }, 2500);
+          return;
+        }
+        handleTurnResponse(data, sentRow);
+        sending = false;
+        setSendingUI(false);
+      })
       .catch(function(err){
         addSystemRow(err.message || 'connection to the investigation engine failed — try again');
-      })
-      .finally(function(){
         sending = false;
         setSendingUI(false);
       });
