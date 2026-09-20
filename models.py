@@ -289,6 +289,24 @@ class SuspectNarrative(BaseModel):
         "answer against something said earlier. Do not re-list a tension "
         "already identified in a previous turn.",
     )
+    unfalsifiable_account: Optional[SelfContradiction] = Field(
+        default=None,
+        description="Set ONCE, and only once, when the suspect's account has "
+        "become one that nothing in it can be checked by anyone — every "
+        "element conveniently beyond verification: cannot recall, cannot "
+        "name, no documentation, the only witness unavailable, the only "
+        "record the one thing they say proves them right. This is not the "
+        "same as a claim merely being unverified; it is the shape of the "
+        "WHOLE account, and it is a recognised signature of fabrication. "
+        "The test is whether a person telling the truth about these events "
+        "would really be unable to offer a single checkable detail. Use the "
+        "same fields as a self-contradiction: claim_text states the pattern "
+        "plainly, earlier_statement and later_statement quote two of the "
+        "unverifiable elements, and evidentiary_impact rates how damning the "
+        "pattern is. Leave null while the suspect is still offering things "
+        "that could be checked, and leave null on every turn after you have "
+        "already flagged it once.",
+    )
     stale_thread: Optional[str] = Field(
         default=None,
         description="Set only if the investigator's last 3+ questions have "

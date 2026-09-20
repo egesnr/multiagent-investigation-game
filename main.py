@@ -282,6 +282,30 @@ def run_turn(
             risk_profile=RiskProfile(story_contradiction=True),
         ))
 
+    # An account where nothing can be checked is a finding in its own right,
+    # scored the same way a self-contradiction is. Without it, a suspect who
+    # answers every question with something unverifiable ("can't recall",
+    # "it was standard", "it's on the statement") banks a flat few points per
+    # turn and the pattern itself — the thing an investigator would actually
+    # find damning — counts for nothing. Flagged once by the narrative agent,
+    # so this scores once, not per turn.
+    if narrative.unfalsifiable_account:
+        pattern = narrative.unfalsifiable_account
+        results.append(CheckResult(
+            quoted_evidence=pattern.claim_text,
+            rationale=(
+                f"Nothing in the account can be checked. e.g. \"{pattern.earlier_statement}\" "
+                f"and \"{pattern.later_statement}\""
+            ),
+            basis=FindingBasis.STORY_HISTORY,
+            investigator_visible=True,
+            claim_type=ClaimType.CONTRADICTION,
+            verification_status=ClaimStatus.CONTRADICTED,
+            strategic_value="high",
+            evidentiary_impact=pattern.evidentiary_impact,
+            risk_profile=RiskProfile(credibility_issue=True),
+        ))
+
     results = dedupe_results(results)
 
     turn_delta, state = process_turn_scoring(results, state, player_answer)

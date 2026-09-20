@@ -255,6 +255,16 @@ own logic, folding in anything new from the latest turn.
 TASK 2 — SELF-CONTRADICTIONS:
 Compare the suspect's LATEST answer against everything they said in EARLIER
 turns (not against outside facts — that is the Checker's job, not yours).
+
+ONLY THE SUSPECT'S OWN WORDS COUNT. Use the SUSPECT'S OWN WORDS list below,
+not the full transcript, to decide what they said. The investigator's
+questions often characterise or paraphrase the suspect's position, sometimes
+wrongly — if the investigator says "you told me you couldn't name the venue"
+and the suspect never said that, then the suspect denying it is NOT a
+contradiction, it is a correction of the investigator. Never treat the
+investigator's words as something the suspect said, and never flag a suspect
+for correcting a mischaracterisation.
+
 Flag it only when two of the suspect's own statements are in real tension:
 a walked-back denial, a detail that quietly changed, a claim that only made
 sense given something they have since taken back. Do not flag:
@@ -269,6 +279,21 @@ For each one you do flag, rate evidentiary_impact using the rubric on that
 field — most self-contradictions are weak or moderate; reserve strong/
 decisive for a reversal that guts something central to the suspect's own
 stated defense.
+
+TASK 2b — AN ACCOUNT NOTHING CAN CHECK:
+Separately from contradictions, watch the SHAPE of the whole account. A
+suspect can avoid ever contradicting themselves by making sure no part of
+their story can be verified: they cannot recall, cannot name, kept no
+document, the one person who could confirm it is unreachable. Individually
+each is ordinary. Together, past a certain point, they are a pattern — and an
+account engineered to be uncheckable is itself evidence, because a person
+describing events that really happened can almost always offer something
+someone else could confirm.
+Flag this ONCE, in unfalsifiable_account, when that point is reached. Do not
+flag it early while they are still giving checkable detail, and do not flag it
+again on later turns once you have flagged it. Be conservative: a suspect who
+simply refuses to answer is stonewalling, which is handled elsewhere — this is
+for one who answers freely and says nothing checkable.
 
 TASK 3 — STALE THREAD:
 Look at the last 3+ turns on the same underlying point. The test is NOT
@@ -286,7 +311,11 @@ stale_thread null even after many turns on it.
 PREVIOUSLY IDENTIFIED CONTRADICTIONS (do not repeat these):
 {prior_contradictions}
 
-FULL TRANSCRIPT SO FAR:
+THE SUSPECT'S OWN WORDS — the only statements that can contradict each other:
+{suspect_words}
+
+FULL TRANSCRIPT SO FAR (for context only; the investigator's lines here are
+NOT things the suspect said):
 {transcript}"""
     ),
     (
@@ -313,6 +342,17 @@ def run_narrative_synthesis(state: GameState) -> SuspectNarrative:
             if state.case_log.contradictions else "- None yet"
         ),
         "transcript": state.transcript,
+        # The full transcript above contains the investigator's questions too,
+        # and a self-contradiction check handed both speakers will sometimes
+        # attribute the investigator's own words to the suspect. Seen live: the
+        # investigator misread "I don't know the dish names" as "I can't name
+        # the venue", said so out loud, and when the player corrected it the
+        # correction was scored as the player contradicting themselves. Only
+        # the lines below can contradict each other.
+        "suspect_words": "\n".join(
+            f"- turn {i + 1}: {t['text']}"
+            for i, t in enumerate(t for t in state.transcript if t["role"] == "suspect")
+        ) or "- Nothing said yet",
         "prior_summary": prior.summary if prior else "",
         "latest_answer": state.transcript[-1]["text"] if state.transcript else "",
     })
@@ -787,6 +827,9 @@ Suspect's account so far, as ONE story:
 Topics already exhausted (do not target these again, even reworded):
 {exhausted_targets}
 
+On the table in front of you right now:
+{room_objects}
+
 Visible case log:
 {case_log}
 
@@ -828,6 +871,9 @@ Suspect's account so far, as ONE story:
 Topics already exhausted (do not target these again, even reworded):
 {exhausted_targets}
 
+On the table in front of you right now:
+{room_objects}
+
 Visible case log:
 {case_log}
 
@@ -855,6 +901,12 @@ def _war_input(state: GameState) -> dict:
         "move_history": state.move_history[-6:],
         "narrative_summary": state.narrative.summary if state.narrative else "No account given yet.",
         "exhausted_targets": state.case_log.exhausted_targets or ["- None"],
+        # What is physically on the table. Previously this reached only the
+        # Reality Gate, framed as what the SUSPECT could reach for, so the
+        # investigator had no idea what it was holding — it spent three of
+        # eight questions demanding the restaurant name while the card
+        # statement showing that name sat in front of it.
+        "room_objects": state.case.room_objects or ["- Nothing but the case file"],
     }
 
 
@@ -995,6 +1047,10 @@ Suspect's account so far, as ONE story:
 Topics already exhausted (do not target these again, even reworded):
 {exhausted_targets}
 
+On the table in front of you right now — you already have these, do not ask
+the suspect for anything they would tell you:
+{room_objects}
+
 Skeptic (arguing to press harder):
 {skeptic}
 
@@ -1028,6 +1084,7 @@ def run_strategist(
         "move_history": state.move_history[-6:],
         "narrative_summary": war_input["narrative_summary"],
         "exhausted_targets": war_input["exhausted_targets"],
+        "room_objects": war_input["room_objects"],
         "skeptic": skeptic.model_dump(),
         "alternative": alternative.model_dump(),
         "case_log": state.case_log.investigator_view(),
@@ -1145,6 +1202,9 @@ Last turn usefulness: {last_turn_usefulness}
 Suspect's account so far, as ONE story:
 {narrative_summary}
 
+On the table in front of you:
+{room_objects}
+
 Grounded Knowledge:
 {known_facts}
 
@@ -1183,6 +1243,7 @@ def run_speaker(
         "remaining": remaining,
         "last_turn_usefulness": last_turn_usefulness,
         "narrative_summary": narrative_summary,
+        "room_objects": case.room_objects or ["- Nothing but the case file"],
         "known_facts": known_facts,
         "case_log": case_log.investigator_view() if case_log else {},
         "transcript": transcript[-10:],
