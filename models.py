@@ -539,6 +539,13 @@ class GameState(BaseModel):
     last_move: Optional[str] = None
     move_history: list[str] = Field(default_factory=list)
 
+    # Set once the narrative agent has flagged the unfalsifiable-account
+    # pattern. Its memory is rebuilt every turn and the only history it
+    # receives is the contradictions list, which this pattern deliberately is
+    # not part of — so without this it re-flagged the same pattern on a later
+    # turn with an extra clause appended, and scored it twice.
+    unfalsifiable_flagged: bool = False
+
     # One entry per turn: the sources the Speaker named for that turn's line
     # (see SpeakerLine.grounding). Kept on the state, not just the debug log,
     # so a saved session can be audited afterwards for claims that were

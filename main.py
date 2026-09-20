@@ -289,7 +289,8 @@ def run_turn(
     # turn and the pattern itself — the thing an investigator would actually
     # find damning — counts for nothing. Flagged once by the narrative agent,
     # so this scores once, not per turn.
-    if narrative.unfalsifiable_account:
+    if narrative.unfalsifiable_account and not state.unfalsifiable_flagged:
+        state.unfalsifiable_flagged = True
         pattern = narrative.unfalsifiable_account
         results.append(CheckResult(
             quoted_evidence=pattern.claim_text,

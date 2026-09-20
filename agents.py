@@ -272,7 +272,13 @@ sense given something they have since taken back. Do not flag:
 - a claim that was already flagged as a self-contradiction in a previous
   turn (check PREVIOUSLY IDENTIFIED CONTRADICTIONS below),
 - ordinary elaboration or added detail that does not conflict with anything
-  said before.
+  said before,
+- the suspect being unable to recall, name, document or produce something.
+  Not remembering is not contradicting yourself. That whole pattern belongs
+  in unfalsifiable_account and NOWHERE ELSE — never also report it here, in
+  any wording. "Cannot recall the details", "account is uncheckable", "every
+  detail is unavailable" are one observation with one home, not three
+  contradictions.
 If the latest answer raises no new tension against the suspect's own prior
 words, return an empty list. Do not manufacture one to have something to say.
 For each one you do flag, rate evidentiary_impact using the rubric on that
@@ -311,6 +317,9 @@ stale_thread null even after many turns on it.
 PREVIOUSLY IDENTIFIED CONTRADICTIONS (do not repeat these):
 {prior_contradictions}
 
+HAS THE UNFALSIFIABLE-ACCOUNT PATTERN ALREADY BEEN FLAGGED?
+{already_flagged_unfalsifiable}
+
 THE SUSPECT'S OWN WORDS — the only statements that can contradict each other:
 {suspect_words}
 
@@ -340,6 +349,12 @@ def run_narrative_synthesis(state: GameState) -> SuspectNarrative:
         "prior_contradictions": (
             "\n".join(f"- {c}" for c in state.case_log.contradictions)
             if state.case_log.contradictions else "- None yet"
+        ),
+        "already_flagged_unfalsifiable": (
+            "YES — you have already flagged this pattern. Leave "
+            "unfalsifiable_account null this turn and every turn from now on."
+            if state.unfalsifiable_flagged else
+            "No — not yet flagged."
         ),
         "transcript": state.transcript,
         # The full transcript above contains the investigator's questions too,
