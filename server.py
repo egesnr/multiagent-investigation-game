@@ -104,6 +104,26 @@ def _turn_findings(state: GameState) -> list[dict]:
     return findings
 
 
+def _case_findings(state: GameState) -> list[dict]:
+    """Every scoring, investigator-visible claim from the whole interview —
+    the same set the evidence board pinned turn by turn, with its text, for
+    the resolution screen's account of why the case ended the way it did."""
+    findings = []
+    for claim in state.case_log.claims:
+        if not claim.investigator_visible:
+            continue
+        points = IMPACT_POINTS.get(claim.evidentiary_impact, 0)
+        if points <= 0:
+            continue
+        findings.append({
+            "tag": _finding_tag(claim, state),
+            "text": claim.text,
+            "turn": claim.turn,
+            "points": points,
+        })
+    return findings
+
+
 @app.get("/")
 def index():
     return FileResponse(WEB_DIR / "index.html")
@@ -211,8 +231,22 @@ def _process_turn(session_id: str, session: dict, answer: str, job_id: str) -> N
         result["resolution"] = {
             "outcome": report.outcome.value,
             "aftermath": report.aftermath,
+            "reasoning": report.reasoning,
+            "confidence": report.confidence,
+            "interview_score": state.score,
+            "verification_score_delta": report.verification_score_delta,
             "final_score": report.final_score,
             "threshold": state.case.arrest_threshold,
+            "findings": _case_findings(state),
+            "verifications": [
+                {
+                    "claim": v.claim,
+                    "status": v.status.value,
+                    "basis": v.basis,
+                    "points": IMPACT_POINTS.get(v.evidentiary_impact, 0),
+                }
+                for v in report.verifications
+            ],
         }
         del _sessions[session_id]
 

@@ -262,6 +262,74 @@
     border:1px solid #6b5f45;
     padding:14px 16px;
   }
+  .case-report{
+    margin-top:24px;
+    width:100%;
+    max-width:40rem;
+    text-align:left;
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+  }
+  .cr-block{ border-top:1px dashed #6b5f45; padding-top:12px; }
+  .cr-block h3, .aftermath-head{ display:flex; align-items:center; gap:10px; }
+  .filepage .aftermath-head{ margin:26px 0 0; width:100%; max-width:40rem; }
+  .aftermath{ max-width:40rem; width:100%; margin-top:8px; }
+  .cr-confidence{
+    font-family:'Special Elite', monospace;
+    font-size:0.72rem;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:#5a4f3a;
+    border:1.5px solid #6b5f45;
+    border-radius:3px;
+    padding:1px 7px;
+  }
+  .cr-confidence:empty{ display:none; }
+  .filepage .cr-reasoning{ margin:0; font-size:0.92rem; line-height:1.65; }
+  .cr-score{
+    border-collapse:collapse;
+    font-family:'IBM Plex Mono', monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:0.85rem;
+    color:#2a2317;
+    min-width:min(100%, 340px);
+  }
+  .cr-score td{ padding:4px 0; }
+  .cr-score td:last-child{ text-align:right; padding-left:24px; }
+  .cr-score .cr-total td{ border-top:1px solid #6b5f45; padding-top:7px; font-weight:600; }
+  .cr-score .cr-total span{ font-weight:400; color:#5a4f3a; }
+  .cr-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; }
+  .filepage .cr-list li{
+    margin:0;
+    display:grid;
+    grid-template-columns: 7.5rem 1fr auto;
+    gap:2px 12px;
+    align-items:baseline;
+    font-size:0.86rem;
+    line-height:1.5;
+  }
+  .cr-tag{
+    font-family:'Oswald', sans-serif;
+    font-size:0.62rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--accent-oxblood);
+  }
+  .cr-tag.muted{ color:#6b5f45; }
+  .cr-pts{
+    font-family:'IBM Plex Mono', monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:0.8rem;
+    color:#3a3120;
+    white-space:nowrap;
+  }
+  .cr-sub{ grid-column:2 / -1; font-size:0.78rem; color:#5a4f3a; }
+  @media (max-width:520px){
+    .filepage .cr-list li{ grid-template-columns: 1fr auto; }
+    .cr-list .cr-tag{ grid-column:1 / -1; }
+    .cr-sub{ grid-column:1 / -1; }
+  }
   .cop-lights{
     position:absolute; inset:0;
     pointer-events:none;
@@ -280,6 +348,573 @@
     100%{ opacity:0; }
   }
   .resolution-actions{ display:flex; gap:14px; margin-top:26px; flex-wrap:wrap; justify-content:center; }
+
+  /* ---------- Finale: a short closing sequence, per outcome ----------
+     Plays before the verdict stamp lands. First person: the player is the
+     suspect, so the camera is their own head. Each ending is its own
+     .finale container (data-ending), with its rules scoped under its class;
+     the container, texture, HUD and letterbox rules are shared.
+
+     CAUGHT is three cuts (ms):
+      SHOT A — the room
+        0  letterbox bars close in, picture flickers on
+      200  investigator stands; 600 leans in with the case file...
+      850  ...SLAM: table + camera jolt, papers skid, lamp swings
+     1000  door bursts open, hallway light; 1050 officer rushes in
+     1450  a hand grabs you from the right; 1550 the view jerks and spins down
+     1920  black impact frame
+      SHOT B — face pinned to the table (tilted, low, blurred foreground)
+     1950  slam into the table; officers standing over you
+      SHOT H — close on your hands, flat on the table, apart
+     2500  the officer's gloved hand comes in with the cuffs, grips your left arm
+     2850  first cuff's jaw swings shut over the left wrist, click
+     3000  the glove grabs your right arm and drags it over (3000-3200)
+     3300  second jaw swings shut, click
+     3550  hauled up: the table drops out of view
+     3650  fade to black...
+     4200  ...up on the room, your chair empty, frozen as an evidence still
+     4700  stamp slams onto the photo
+     5300+ the case report fades in, section by section */
+  .finale{
+    position:relative;
+    box-sizing:content-box; /* aspect-ratio applies to the picture, not the photo border */
+    width:calc(100% - 12px);
+    max-width:720px;
+    aspect-ratio:16/10;
+    margin:0 auto;
+    background:#000;
+    border:6px solid #f3ece0;
+    border-bottom-width:24px;
+    box-shadow: 1px 3px 14px #0008;
+    transform:rotate(-1deg);
+    overflow:hidden;
+  }
+  .finale .f-shot{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+  /* Film texture: scanlines + a soft vignette, over the picture */
+  .finale::after{
+    content:"";
+    position:absolute; inset:0;
+    pointer-events:none;
+    background:
+      radial-gradient(ellipse at center, transparent 55%, #000a 100%),
+      repeating-linear-gradient(0deg, #ffffff08 0 1px, transparent 1px 3px);
+  }
+  .finale-caption{
+    position:absolute; left:0; right:0; bottom:-21px;
+    font-family:'Courier Prime', monospace;
+    font-size:0.74rem;
+    color:#5a4f3a;
+    text-align:center;
+  }
+  .finale-hud{
+    position:absolute; top:calc(7% + 8px); left:10px;
+    z-index:2;
+    font-family:'Oswald', sans-serif;
+    font-size:0.58rem;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:#cfd4da;
+    background:#00000066;
+    padding:3px 7px;
+    border-radius:2px;
+    display:flex; align-items:center; gap:7px;
+  }
+  /* The HUD belongs to the recording, not to your eyes: hidden through the takedown */
+  .finale.caught.play .finale-hud{ animation: fHudAway 2250ms steps(1) 1550ms; }
+  @keyframes fHudAway{ 0%,100%{ opacity:0; } }
+
+  .f-bar{
+    position:absolute; left:0; right:0; height:7%;
+    background:#050607;
+    z-index:1;
+  }
+  .f-bar.top{ top:0; transform:translateY(-100%); }
+  .f-bar.bottom{ bottom:0; transform:translateY(100%); }
+  .finale.play .f-bar{ animation: fBars 450ms cubic-bezier(.2,.8,.2,1) forwards; }
+  @keyframes fBars{ to{ transform:translateY(0); } }
+
+  .f-black{ position:absolute; inset:0; opacity:0; pointer-events:none; background:#000; }
+  .finale.caught.play .f-black{
+    animation:
+      fCut 110ms steps(1) 1920ms,
+      fBlackOut 900ms ease-in-out 3650ms forwards;
+  }
+  @keyframes fCut{ 0%,100%{ opacity:1; } }
+  @keyframes fBlackOut{
+    0%{ opacity:0; }
+    20%, 60%{ opacity:1; }
+    100%{ opacity:0; }
+  }
+
+  /* ----- shot switching + whole-picture filters ----- */
+  .finale.caught.play .f-shotA{
+    animation:
+      fBoot 520ms steps(1) both,
+      fBlurGrab 400ms ease-in 1550ms,
+      fOffAir 1850ms steps(1) 1950ms,
+      fFreeze 1ms linear 3800ms forwards;
+  }
+  @keyframes fBoot{
+    0%{ opacity:0; }
+    20%{ opacity:.7; }
+    35%{ opacity:.1; }
+    55%{ opacity:1; }
+    70%{ opacity:.4; }
+    100%{ opacity:1; }
+  }
+  @keyframes fBlurGrab{
+    0%{ filter:blur(0); }
+    30%{ filter:blur(2px); }
+    100%{ filter:blur(9px); }
+  }
+  @keyframes fOffAir{ 0%,100%{ opacity:0; } }
+  @keyframes fFreeze{
+    to{ filter:grayscale(.85) sepia(.3) contrast(1.15) brightness(1.05); }
+  }
+  .finale .f-shotB{ opacity:0; }
+  .finale.caught.play .f-shotB{
+    animation:
+      fOnAir 550ms steps(1) 1950ms,
+      fbBlurIn 300ms ease-out 1950ms;
+  }
+  .finale .f-shotH{ opacity:0; }
+  .finale.caught.play .f-shotH{
+    animation:
+      fOnAir 1250ms steps(1) 2500ms,
+      fbBlurIn 220ms ease-out 2500ms,
+      fbBlurLift 200ms ease-in 3550ms;
+  }
+  @keyframes fOnAir{ 0%,100%{ opacity:1; } }
+  @keyframes fbBlurIn{ from{ filter:blur(8px); } to{ filter:blur(0); } }
+  @keyframes fbBlurLift{ from{ filter:blur(0); } to{ filter:blur(10px); } }
+
+  /* SVG groups animate in their SVG's own coordinate space */
+  .finale .f-pov, .finale .f-cam, .finale .f-shake,
+  .finale .f-investigator, .finale .f-lamp, .finale .f-table, .finale .f-door,
+  .finale .f-officer, .finale .f-grab,
+  .finale .fb-tilt, .finale .fh-lift, .finale .fh-jolt, .finale .fh-glove,
+  .finale .fh-cuffs, .finale .fh-pull, .finale .fh-jaw{
+    transform-box:view-box;
+  }
+  .finale .f-folder, .finale .f-paper{ transform-box:fill-box; transform-origin:50% 50%; }
+
+  /* ----- SHOT A: the room ----- */
+  .finale.caught.play .f-cam{
+    transform-origin:480px 560px;
+    animation: fPush 3.4s cubic-bezier(.25,.1,.25,1) 200ms both;
+  }
+  @keyframes fPush{ from{ transform:scale(1); } to{ transform:scale(1.08); } }
+
+  .finale.caught.play .f-shake{
+    animation:
+      fJoltBig 420ms ease 850ms,
+      fJoltSmall 300ms ease 1000ms;
+  }
+  @keyframes fJoltBig{
+    0%{ transform:translate(0,0); }
+    15%{ transform:translate(-12px,14px); }
+    35%{ transform:translate(9px,-8px); }
+    55%{ transform:translate(-6px,5px); }
+    75%{ transform:translate(3px,-2px); }
+    100%{ transform:translate(0,0); }
+  }
+  @keyframes fJoltSmall{
+    0%{ transform:translate(0,0); }
+    30%{ transform:translate(5px,-3px); }
+    60%{ transform:translate(-3px,2px); }
+    100%{ transform:translate(0,0); }
+  }
+
+  .finale.caught.play .f-investigator{
+    transform-origin:560px 420px;
+    animation:
+      fStand 400ms cubic-bezier(.3,.7,.3,1) 200ms both,
+      fSlamLean 700ms cubic-bezier(.5,0,.3,1) 600ms forwards;
+  }
+  @keyframes fStand{
+    from{ transform:translateY(0) scale(1); }
+    to{ transform:translateY(-38px) scale(1.09); }
+  }
+  @keyframes fSlamLean{
+    0%{ transform:translateY(-38px) scale(1.09); }
+    36%{ transform:translateY(-6px) scale(1.2); }
+    100%{ transform:translateY(-30px) scale(1.12); }
+  }
+
+  .finale .f-folder, .finale .f-paper{ opacity:0; }
+  .finale.caught.play .f-folder{ animation: fFolderSlam 250ms cubic-bezier(.6,0,1,.6) 600ms both; }
+  @keyframes fFolderSlam{
+    from{ opacity:0; transform:translateY(-230px) scale(1.5) rotate(-8deg); }
+    40%{ opacity:1; }
+    to{ opacity:1; transform:translateY(0) scale(1) rotate(-3deg); }
+  }
+  .finale.caught.play .f-paper.a{ animation: fPaperA 500ms cubic-bezier(.2,.8,.3,1) 850ms forwards; }
+  .finale.caught.play .f-paper.b{ animation: fPaperB 560ms cubic-bezier(.2,.8,.3,1) 850ms forwards; }
+  @keyframes fPaperA{
+    from{ opacity:1; transform:translate(0,0) rotate(-3deg); }
+    to{ opacity:1; transform:translate(-120px,6px) rotate(-12deg); }
+  }
+  @keyframes fPaperB{
+    from{ opacity:1; transform:translate(0,0) rotate(-3deg); }
+    to{ opacity:1; transform:translate(-40px,12px) rotate(9deg); }
+  }
+  .finale.caught.play .f-table{
+    transform-origin:480px 600px;
+    animation: fTableJump 300ms ease-out 850ms;
+  }
+  @keyframes fTableJump{
+    0%{ transform:translateY(0); }
+    30%{ transform:translateY(7px); }
+    60%{ transform:translateY(-3px); }
+    100%{ transform:translateY(0); }
+  }
+  .finale.caught.play .f-lamp{
+    transform-origin:560px 0px;
+    animation: fSwing 2.4s cubic-bezier(.4,0,.6,1) 850ms both;
+  }
+  @keyframes fSwing{
+    0%{ transform:rotate(0deg); }
+    12%{ transform:rotate(11deg); }
+    34%{ transform:rotate(-8deg); }
+    56%{ transform:rotate(4.5deg); }
+    78%{ transform:rotate(-2deg); }
+    100%{ transform:rotate(0deg); }
+  }
+
+  .finale.caught.play .f-door{
+    transform-origin:850px 270px;
+    animation: fDoorOpen 260ms cubic-bezier(.2,.9,.3,1.25) 1000ms both;
+  }
+  @keyframes fDoorOpen{ from{ transform:scaleX(1); } to{ transform:scaleX(.12); } }
+  .finale .f-hall{ opacity:0; }
+  .finale.caught.play .f-hall{ animation: fHallLight 380ms ease-out 1000ms forwards; }
+  @keyframes fHallLight{
+    0%{ opacity:0; }
+    30%{ opacity:1; }
+    100%{ opacity:.85; }
+  }
+
+  .finale .f-officer{ opacity:0; }
+  .finale.caught.play .f-officer.one{
+    transform-origin:760px 540px;
+    animation:
+      fRushIn 400ms cubic-bezier(.3,.6,.4,1) 1050ms both,
+      fGone 1ms steps(1) 3800ms forwards;
+  }
+  @keyframes fRushIn{
+    0%{ opacity:0; transform:translate(45px,-170px) scale(.62); }
+    15%{ opacity:1; }
+    35%{ transform:translate(30px,-112px) scale(.74) translateY(-6px); }
+    65%{ transform:translate(14px,-52px) scale(.87) translateY(-6px); }
+    100%{ opacity:1; transform:translate(0,0) scale(1); }
+  }
+  .finale.caught.play .f-officer.two{
+    transform-origin:830px 375px;
+    animation: fStepIn 500ms ease-out 1300ms both;
+  }
+  @keyframes fStepIn{
+    from{ opacity:0; transform:translateX(18px) scale(.94); }
+    to{ opacity:1; transform:translateX(0) scale(1); }
+  }
+  @keyframes fGone{ to{ opacity:0; } }
+
+  /* Your hands: on the table until you're hauled out, then the chair is empty */
+  .finale.caught.play .f-wrists{ animation: fGone 1ms steps(1) 3800ms forwards; }
+
+  /* The grab: an arm swings in from the right, onto your shoulder */
+  .finale .f-grab{ opacity:0; }
+  .finale.caught.play .f-grab{
+    animation:
+      fGrabIn 130ms cubic-bezier(.3,0,.2,1) 1450ms forwards,
+      fGone 1ms steps(1) 3800ms forwards;
+  }
+  @keyframes fGrabIn{
+    from{ opacity:1; transform:translate(380px,-140px); }
+    to{ opacity:1; transform:translate(0,0); }
+  }
+
+  /* ...and your head goes with it: jerk sideways, then spin down */
+  .finale.caught.play .f-pov{
+    transform-origin:480px 300px;
+    animation: fTakedown 400ms cubic-bezier(.5,0,.9,.5) 1550ms;
+  }
+  @keyframes fTakedown{
+    0%{ transform:none; }
+    25%{ transform:translate(-50px,14px) rotate(-7deg); }
+    55%{ transform:translate(-30px,60px) rotate(12deg) scale(1.1); }
+    100%{ transform:translate(40px,320px) rotate(70deg) scale(1.5); }
+  }
+
+  /* ----- SHOT B: cheek on the table ----- */
+  .finale .fb-tilt{ transform-origin:480px 300px; transform:rotate(24deg) scale(1.1); }
+  .finale.caught.play .fb-tilt{ animation: fbSlam 350ms cubic-bezier(.3,1.4,.5,1) 1950ms both; }
+  @keyframes fbSlam{
+    from{ transform:translateY(-120px) rotate(75deg) scale(1.5); }
+    to{ transform:rotate(24deg) scale(1.1); }
+  }
+  .finale .fb-vig{ opacity:.75; }
+
+  /* ----- SHOT H: your hands, and the cuffs going on ----- */
+  .finale .fh-glove, .finale .fh-cuffs{ opacity:0; }
+  /* the glove: in with the cuffs, grips your left arm, crosses to your
+     right arm, drags it over to the waiting cuff */
+  .finale.caught.play .fh-glove{ animation: fhGlove 700ms cubic-bezier(.3,.6,.3,1) 2500ms forwards; }
+  @keyframes fhGlove{
+    0%{ opacity:1; transform:translate(320px,300px); }
+    21%{ opacity:1; transform:translate(0,0); }
+    50%{ opacity:1; transform:translate(0,0); }
+    71%{ opacity:1; transform:translate(330px,0); }
+    100%{ opacity:1; transform:translate(160px,0); }
+  }
+  .finale.caught.play .fh-cuffs{ animation: fhCuffsIn 150ms ease-out 2500ms forwards; }
+  @keyframes fhCuffsIn{
+    from{ opacity:1; transform:translate(320px,300px); }
+    to{ opacity:1; transform:translate(0,0); }
+  }
+  .finale.caught.play .fh-pull{ animation: fhPull 200ms cubic-bezier(.5,0,.3,1) 3000ms forwards; }
+  @keyframes fhPull{ to{ transform:translate(-170px,0); } }
+
+  /* each cuff's single strand swings on its hinge through the housing */
+  .finale .fh-jaw{ transform-origin:0 0; }
+  .finale .fh-jaw.a{ transform:rotate(-150deg); }
+  .finale .fh-jaw.b{ transform:rotate(150deg); }
+  .finale.caught.play .fh-jaw.a{ animation: fhJawA 130ms ease-in 2720ms forwards; }
+  .finale.caught.play .fh-jaw.b{ animation: fhJawB 130ms ease-in 3170ms forwards; }
+  @keyframes fhJawA{ from{ transform:rotate(-150deg); } to{ transform:rotate(0deg); } }
+  @keyframes fhJawB{ from{ transform:rotate(150deg); } to{ transform:rotate(0deg); } }
+
+  .finale.caught.play .fh-jolt{
+    animation:
+      fhClick 200ms ease-out 2850ms,
+      fhClick 200ms ease-out 3300ms;
+  }
+  @keyframes fhClick{
+    0%{ transform:translate(0,0); }
+    30%{ transform:translate(-8px,10px); }
+    100%{ transform:translate(0,0); }
+  }
+  .finale .fh-lift{ transform-origin:480px 300px; }
+  .finale.caught.play .fh-lift{ animation: fhLift 200ms ease-in 3550ms forwards; }
+  @keyframes fhLift{ to{ transform:translateY(320px) rotate(8deg) scale(1.1); } }
+
+
+  /* ================= NOT PROVEN =================
+     0     bars in, picture flickers on
+     300   investigator leans in close; camera pushes in (a tense beat)
+     1300  ...and sits back; 1500 flips the case file shut
+     1900  points you to the door
+     2300  you stand: the view rises, your hands leave the table
+     2800  you walk to the door (footsteps)
+     3450  your own hand comes up; 3650 pushes the door open
+     3750  hallway light whites out the picture
+     4100  back on the room: investigator alone, your chair empty, the door
+           open, frozen in a cold blue tint
+     4700  stamp */
+  .finale.not-proven .n-door, .finale.not-proven .n-inv, .finale.not-proven .n-cam,
+  .finale.not-proven .n-rise, .finale.not-proven .n-walk, .finale.not-proven .n-arm,
+  .finale.not-proven .n-cover, .finale.not-proven .n-push, .finale.not-proven .n-wrists{
+    transform-box:view-box;
+  }
+  .finale.not-proven.play .n-shot{
+    animation:
+      fBoot 520ms steps(1) both,
+      nFreeze 1ms linear 4100ms forwards;
+  }
+  @keyframes nFreeze{
+    to{ filter:grayscale(.9) sepia(.25) hue-rotate(175deg) saturate(1.6) contrast(1.1); }
+  }
+  .finale.not-proven.play .finale-hud{ animation: fHudAway 1800ms steps(1) 2300ms; }
+
+  .finale.not-proven.play .n-cam{
+    transform-origin:560px 300px;
+    animation: nPushBack 1400ms cubic-bezier(.4,0,.3,1) 300ms both;
+  }
+  @keyframes nPushBack{
+    0%{ transform:scale(1); }
+    43%, 71%{ transform:scale(1.1); }
+    100%{ transform:scale(1.02); }
+  }
+  .finale.not-proven.play .n-inv{
+    transform-origin:560px 420px;
+    animation: nLeanSit 1400ms cubic-bezier(.4,0,.3,1) 300ms both;
+  }
+  @keyframes nLeanSit{
+    0%{ transform:none; }
+    43%, 71%{ transform:translateY(-10px) scale(1.14); }
+    100%{ transform:translateY(8px) scale(.96); }
+  }
+  /* the case file's cover flips over on its spine */
+  .finale.not-proven.play .n-cover{
+    transform-origin:521px 487px;
+    animation: nFlip 300ms ease-in-out 1500ms forwards;
+  }
+  @keyframes nFlip{ to{ transform:scaleX(-1); } }
+  .finale.not-proven .n-arm{ opacity:0; transform-origin:635px 300px; }
+  .finale.not-proven.play .n-arm{ animation: nPoint 300ms cubic-bezier(.3,.7,.3,1) 1900ms forwards; }
+  @keyframes nPoint{
+    from{ opacity:1; transform:rotate(70deg); }
+    to{ opacity:1; transform:rotate(0deg); }
+  }
+  /* standing up: the room drops in the frame; hands slide off the table */
+  .finale.not-proven.play .n-rise{ animation: nRise 1800ms cubic-bezier(.3,.6,.3,1) 2300ms; }
+  @keyframes nRise{
+    0%{ transform:none; }
+    28%, 100%{ transform:translateY(110px) scale(.95); }
+  }
+  .finale.not-proven.play .n-wrists{ animation: nHandsOff 300ms ease-in 2300ms forwards; }
+  @keyframes nHandsOff{ to{ transform:translateY(200px); opacity:0; } }
+  /* walking to the door, head bobbing */
+  .finale.not-proven.play .n-walk{
+    transform-origin:805px 230px;
+    animation: nWalk 1300ms linear 2800ms;
+  }
+  @keyframes nWalk{
+    0%{ transform:none; }
+    15%{ transform:translate(-50px,-15px) scale(1.12) rotate(1deg); }
+    30%{ transform:translate(-100px,-38px) scale(1.3) rotate(-1deg); }
+    45%{ transform:translate(-150px,-55px) scale(1.5) rotate(1deg); }
+    60%{ transform:translate(-200px,-88px) scale(1.72) rotate(-1deg); }
+    70%{ transform:translate(-229px,-106px) scale(1.9); }
+    100%{ transform:translate(-229px,-165px) scale(2.4); }
+  }
+  .finale.not-proven .n-push{ opacity:0; transform-origin:560px 640px; }
+  .finale.not-proven.play .n-push{
+    animation:
+      nPush 350ms cubic-bezier(.3,.7,.3,1) 3450ms forwards,
+      fGone 1ms steps(1) 4100ms forwards;
+  }
+  @keyframes nPush{
+    0%{ opacity:1; transform:translate(120px,320px) rotate(10deg); }
+    60%{ opacity:1; transform:translate(0,0); }
+    100%{ opacity:1; transform:translate(-4px,-18px) scale(.94); }
+  }
+  .finale.not-proven.play .n-door{
+    transform-origin:850px 270px;
+    animation: fDoorOpen 300ms cubic-bezier(.2,.9,.3,1.1) 3650ms forwards;
+  }
+  .finale.not-proven .n-hall{ opacity:0; }
+  .finale.not-proven.play .n-hall{ animation: fHallLight 380ms ease-out 3650ms forwards; }
+  .finale .n-white{ position:absolute; inset:0; opacity:0; pointer-events:none; background:#eef2f5; }
+  .finale.not-proven.play .n-white{ animation: nWhite 700ms ease-in-out 3750ms forwards; }
+  @keyframes nWhite{
+    0%{ opacity:0; }
+    50%{ opacity:1; }
+    100%{ opacity:0; }
+  }
+
+  /* ================= POLICY VIOLATION =================
+     0     bars in, picture flickers on
+     200   investigator leans in; 400 slides a form across the table
+     1400  cut to your hands: a disciplinary notice in front of you
+     1650  your right hand goes for the pen; 1900 picks it up
+     2100  you sign (2100-2900), the signature writing itself out
+     2950  the investigator's hand takes the form; 3050 slides it away
+     3600  fade to black...
+     3800  ...up on the room, frozen in an amber tint
+     4700  stamp */
+  .finale.policy .p-inv, .finale.policy .p-writer, .finale.policy .p-take{ transform-box:view-box; }
+  .finale.policy .p-sheet{ transform-box:fill-box; transform-origin:50% 50%; }
+  .finale.policy.play .p-shotA{
+    animation:
+      fBoot 520ms steps(1) both,
+      fOffAir 2400ms steps(1) 1400ms,
+      pFreeze 1ms linear 3800ms forwards;
+  }
+  @keyframes pFreeze{
+    to{ filter:sepia(.7) saturate(1.5) contrast(1.1) brightness(1.02); }
+  }
+  .finale.policy .p-shotP{ opacity:0; }
+  .finale.policy.play .p-shotP{
+    animation:
+      fOnAir 2400ms steps(1) 1400ms,
+      fbBlurIn 220ms ease-out 1400ms;
+  }
+  .finale.policy.play .finale-hud{ animation: fHudAway 2400ms steps(1) 1400ms; }
+  .finale.policy.play .f-black{ animation: fBlackOut 900ms ease-in-out 3600ms forwards; }
+
+  .finale.policy.play .p-inv{
+    transform-origin:560px 420px;
+    animation: pLean 500ms cubic-bezier(.3,.7,.3,1) 200ms both;
+  }
+  @keyframes pLean{ to{ transform:translateY(-6px) scale(1.12); } }
+  .finale.policy .p-hall{ opacity:0; } /* door stays shut in this ending */
+  .finale.policy .p-sheet{ opacity:0; }
+  .finale.policy.play .p-sheet{
+    animation:
+      pSlide 700ms cubic-bezier(.3,.7,.3,1) 400ms forwards,
+      fGone 1ms steps(1) 3800ms forwards;
+  }
+  @keyframes pSlide{
+    from{ opacity:1; transform:translate(70px,-14px) scale(.6); }
+    to{ opacity:1; transform:none; }
+  }
+
+  /* the writing hand: its origin is the pen tip, so these are pen positions */
+  .finale.policy .p-writer{ transform:translate(660px,250px); }
+  .finale.policy.play .p-writer{ animation: pWrite 1550ms linear 1650ms forwards; }
+  @keyframes pWrite{
+    0%{ transform:translate(660px,250px); animation-timing-function:ease-in-out; }
+    16.1%{ transform:translate(600px,420px); animation-timing-function:ease-in-out; }
+    29%{ transform:translate(409px,334px); }
+    41.9%{ transform:translate(448px,322px); }
+    54.8%{ transform:translate(488px,338px); }
+    67.7%{ transform:translate(528px,320px); }
+    80.6%{ transform:translate(566px,326px); animation-timing-function:ease-in-out; }
+    100%{ transform:translate(660px,250px); }
+  }
+  .finale.policy .p-heldpen{ opacity:0; }
+  .finale.policy.play .p-heldpen{ animation: fShow 1ms steps(1) 1900ms forwards; }
+  @keyframes fShow{ to{ opacity:1; } }
+  .finale.policy.play .p-pen{ animation: fGone 1ms steps(1) 1900ms forwards; }
+  .finale.policy .p-sig{ stroke-dasharray:1; stroke-dashoffset:1; }
+  .finale.policy.play .p-sig{ animation: pSign 800ms linear 2100ms forwards; }
+  @keyframes pSign{ to{ stroke-dashoffset:0; } }
+  .finale.policy .p-invhand{ opacity:0; }
+  .finale.policy.play .p-invhand{ animation: fShow 1ms steps(1) 2950ms forwards; }
+  .finale.policy.play .p-take{
+    transform-origin:480px 250px;
+    animation: pTake 400ms cubic-bezier(.5,0,.7,.4) 3050ms forwards;
+  }
+  @keyframes pTake{ to{ transform:translate(30px,-470px) rotate(4deg); } }
+
+  /* The stamp lands ON the photo, half over the picture, half on the file */
+  .resolution.has-finale .verdict-stamp{
+    position:relative;
+    z-index:3;
+    margin-top:-58px;
+    left:clamp(40px, 22vw, 230px); /* lower-right corner, clear of the cuffs */
+    background:#efe6d4ee;
+    box-shadow: 0 4px 18px #0006;
+    font-size:clamp(2.2rem, 8vw, 3.6rem);
+    animation: stampSlam 520ms cubic-bezier(.5,0,.3,1.3) var(--stamp-at, 4700ms) both;
+  }
+  @keyframes stampSlam{
+    0%{ opacity:0; transform:scale(4) rotate(-22deg); filter:blur(6px); }
+    60%{ opacity:1; transform:scale(.9) rotate(-4deg); filter:blur(0); }
+    80%{ transform:scale(1.05) rotate(-6deg); }
+    100%{ opacity:1; transform:scale(1) rotate(-5deg); filter:blur(0); }
+  }
+  /* a long label (POLICY VIOLATION) needs less offset to stay on the page */
+  .resolution.has-finale .verdict-stamp.long{
+    left:clamp(10px, 9vw, 110px);
+    font-size:clamp(1.6rem, 5.5vw, 2.6rem);
+  }
+  .filepage.resolution.has-finale.impact{ animation: bigImpact 460ms ease calc(var(--stamp-at, 4700ms) + 280ms); }
+  @keyframes bigImpact{
+    0%{ transform:translate(0,0); }
+    15%{ transform:translate(-9px,5px); }
+    35%{ transform:translate(7px,-4px); }
+    55%{ transform:translate(-5px,3px); }
+    75%{ transform:translate(3px,-1px); }
+    100%{ transform:translate(0,0); }
+  }
+
+  /* The case report waits its turn: fades up once the verdict is in. */
+  .resolution .reveal{ animation: revealUp 500ms ease both; animation-delay:calc(var(--reveal-at, 800ms) + var(--i, 0) * 160ms); }
+  @keyframes revealUp{
+    from{ opacity:0; transform:translateY(12px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
 
   /* ================= INTERVIEW SCREEN ================= */
   .scene-grid{
@@ -594,6 +1229,10 @@
     .verdict-stamp{ animation:none; opacity:1; transform:rotate(-5deg); }
     .filepage.resolution.impact{ animation:none; }
     .cop-lights.on{ animation:none; }
+    /* Skip straight to the finale's last frame; show the report at once. */
+    .finale.play, .finale.play *{ animation-duration:1ms !important; animation-delay:0s !important; animation-iteration-count:1 !important; }
+    .resolution.has-finale .verdict-stamp{ animation:none; opacity:1; transform:rotate(-5deg); }
+    .resolution .reveal{ animation:none; }
   }
 </style>
 </head>
@@ -770,10 +1409,581 @@
     <p class="subhead" id="resolutionPersonaLine"></p>
 
     <div class="resolution-body">
+      <!-- Gradients and filters shared by every finale scene. Kept in one
+           rendered (zero-size) SVG: defs inside a hidden SVG don't reliably
+           paint when referenced from another one. -->
+      <svg class="f-defs" width="0" height="0" aria-hidden="true" style="position:absolute">
+        <defs>
+            <radialGradient id="fLampGlow" cx="50%" cy="0%" r="75%">
+              <stop offset="0%" stop-color="#e9d9c2" stop-opacity="0.55"/>
+              <stop offset="100%" stop-color="#e9d9c2" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="fMirrorGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="var(--mirror-a)"/>
+              <stop offset="55%" stop-color="var(--mirror-b)"/>
+              <stop offset="100%" stop-color="var(--mirror-a)"/>
+            </linearGradient>
+            <linearGradient id="fFloorGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--floor)"/>
+              <stop offset="100%" stop-color="var(--floor-line)"/>
+            </linearGradient>
+            <linearGradient id="fHallGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#dfe6ec" stop-opacity="0.55"/>
+              <stop offset="100%" stop-color="#dfe6ec" stop-opacity="0"/>
+            </linearGradient>
+          
+            <filter id="fbBlurNear" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
+            <filter id="fbBlurMid" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter>
+            <radialGradient id="fbGlare" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#f4d9a8" stop-opacity="0.75"/>
+              <stop offset="100%" stop-color="#f4d9a8" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="fbVig" cx="50%" cy="50%" r="70%">
+              <stop offset="45%" stop-color="#000" stop-opacity="0"/>
+              <stop offset="100%" stop-color="#000" stop-opacity="0.95"/>
+            </radialGradient>
+            <linearGradient id="fbTable" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4a3a2e"/>
+              <stop offset="100%" stop-color="#1e1612"/>
+            </linearGradient>
+            <linearGradient id="fbMirror" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="var(--mirror-a)"/>
+              <stop offset="55%" stop-color="var(--mirror-b)"/>
+              <stop offset="100%" stop-color="var(--mirror-a)"/>
+            </linearGradient>
+          
+            <linearGradient id="fhTable" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#5c4838"/>
+              <stop offset="100%" stop-color="#241b15"/>
+            </linearGradient>
+            <linearGradient id="fhSteel" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#f1f4f6"/>
+              <stop offset="45%" stop-color="#a3acb5"/>
+              <stop offset="100%" stop-color="#4d555e"/>
+            </linearGradient>
+            <filter id="fhBlur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4"/></filter>
+        </defs>
+      </svg>
+
+      <!-- ===== Finale: CAUGHT ===== -->
+      <div class="finale caught" data-ending="CAUGHT" hidden>
+        <!-- SHOT A: the room, from your chair -->
+        <svg class="f-shot f-shotA" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+
+          <g class="f-pov">
+          <g transform="translate(0 -40)"><g class="f-shake"><g class="f-cam">
+          <rect x="-200" y="-200" width="1360" height="570" fill="var(--wall)"/>
+          <rect x="-200" y="330" width="1360" height="40" fill="var(--wall-dark)" opacity="0.5"/>
+          <rect x="60" y="70" width="230" height="150" rx="2" fill="url(#fMirrorGrad)" stroke="#0a0c0f" stroke-width="6"/>
+          <rect x="-200" y="370" width="1360" height="470" fill="url(#fFloorGrad)"/>
+          <line x1="-200" y1="370" x2="1160" y2="370" stroke="#000" stroke-opacity="0.4"/>
+
+          <!-- Door on the right wall: bright hallway behind, light spills on the floor -->
+          <rect x="752" y="162" width="106" height="210" fill="#0a0c0f"/>
+          <g class="f-hall">
+            <rect x="758" y="168" width="94" height="202" fill="#c9d2d9"/>
+            <polygon points="758,370 852,370 930,470 690,470" fill="url(#fHallGrad)"/>
+          </g>
+          <!-- second officer, waiting in the doorway (drawn before the door leaf) -->
+          <g class="f-officer two" fill="#15181c">
+            <path d="M806,300 Q810,280 830,280 Q850,280 854,300 L858,375 L802,375 Z"/>
+            <circle cx="830" cy="266" r="13"/>
+            <path d="M814,258 L846,258 L848,251 Q830,242 812,251 Z"/>
+            <rect x="810" y="257" width="42" height="4" rx="2"/>
+          </g>
+          <rect class="f-door" x="758" y="168" width="94" height="202" fill="#1f242a" stroke="#101316" stroke-width="3"/>
+
+          <g class="f-investigator">
+            <path d="M470,300 Q480,250 560,250 Q640,250 650,300 L660,420 L460,420 Z" fill="var(--silhouette)"/>
+            <circle cx="560" cy="228" r="34" fill="var(--silhouette)"/>
+          </g>
+
+          <g class="f-lamp">
+            <line x1="560" y1="-200" x2="560" y2="118" stroke="#0c0e11" stroke-width="3"/>
+            <polygon points="440,420 680,420 560,120" fill="url(#fLampGlow)" opacity="0.6"/>
+            <path d="M520,118 L600,118 L622,150 L498,150 Z" fill="#e9d9c2"/>
+            <circle cx="560" cy="150" r="5" fill="#fff8e6"/>
+          </g>
+
+          <g class="f-table">
+            <polygon points="300,470 660,470 760,600 200,600" fill="var(--table)"/>
+            <polygon points="300,470 660,470 668,486 292,486" fill="var(--table-edge)"/>
+            <!-- the case file, slammed down; two sheets skid out of it -->
+            <polygon class="f-paper a" points="506,476 606,476 610,498 502,498" fill="#e7ded0"/>
+            <polygon class="f-paper b" points="516,475 616,475 620,497 512,497" fill="#d9cfbd"/>
+            <g class="f-folder">
+              <polygon points="498,474 638,474 644,501 492,501" fill="#b89a64"/>
+              <polygon points="500,474 548,474 551,469 503,469" fill="#a88a55"/>
+              <line x1="510" y1="488" x2="586" y2="488" stroke="#7d6540" stroke-width="3"/>
+            </g>
+          </g>
+
+          <!-- the officer who comes for you: ends up at your right, by the table -->
+          <g class="f-officer one" fill="#121518">
+            <path d="M708,352 Q716,318 760,318 Q804,318 812,352 L822,540 L698,540 Z"/>
+            <circle cx="760" cy="296" r="24"/>
+            <path d="M731,282 L789,282 L792,270 Q760,254 728,270 Z"/>
+            <rect x="724" y="280" width="72" height="6" rx="3"/>
+            <rect x="752" y="276" width="16" height="7" rx="1" fill="#8a7a4a"/>
+            <path d="M708,372 Q684,430 672,478 L690,484 Q704,440 722,392 Z"/>
+          </g>
+
+          <!-- Your forearms, foreground, sleeves out of frame; hands catch the lamp -->
+          <g transform="translate(0 30) translate(480 600) scale(1.4) translate(-480 -600)">
+          <g class="f-wrists">
+            <path d="M200,600 L372,528 Q392,520 404,538 L416,560 L290,600 Z" fill="#1b1f24"/>
+            <path d="M760,600 L588,528 Q568,520 556,538 L544,560 L670,600 Z" fill="#1b1f24"/>
+            <path d="M398,524 Q430,508 462,516 Q478,524 470,540 Q458,556 428,560 Q408,562 400,548 Z" fill="#5a4a3e"/>
+            <path d="M562,524 Q530,508 498,516 Q482,524 490,540 Q502,556 532,560 Q552,562 560,548 Z" fill="#5a4a3e"/>
+            <path d="M404,524 Q432,512 460,518" fill="none" stroke="#7a6454" stroke-width="3"/>
+            <path d="M556,524 Q528,512 500,518" fill="none" stroke="#7a6454" stroke-width="3"/>
+          </g>
+          </g>
+          </g></g></g>
+
+          <!-- The grab: an officer's arm, right up against the camera, onto your shoulder -->
+          <g class="f-grab" fill="#0b0d10">
+            <path d="M1000,170 L1000,470 Q900,520 840,600 L690,600 Q700,540 760,470 Q850,330 1000,170 Z"/>
+            <path d="M700,520 Q660,540 650,600 L780,600 Q790,560 770,530 Z"/>
+          </g>
+          </g>
+        </svg>
+
+        <!-- SHOT B: your cheek pressed to the table. Drawn upright with a low
+             eye-line, then the whole world is tilted (see .fb-tilt). -->
+        <svg class="f-shot f-shotB" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+
+          <g class="fb-tilt">
+            <rect x="-600" y="-600" width="2160" height="1100" fill="var(--wall)"/>
+            <rect x="40" y="40" width="260" height="170" fill="url(#fbMirror)" stroke="#0a0c0f" stroke-width="6"/>
+
+            <!-- open door, hallway beyond, the second officer in it -->
+            <rect x="900" y="30" width="124" height="372" fill="#0a0c0f"/>
+            <rect x="906" y="36" width="112" height="366" fill="#c9d2d9"/>
+            <g fill="#15181c">
+              <path d="M930,250 Q936,214 962,214 Q988,214 994,250 L1000,402 L924,402 Z"/>
+              <circle cx="962" cy="192" r="19"/>
+              <path d="M940,180 L984,180 L987,170 Q962,158 937,170 Z"/>
+            </g>
+
+            <!-- lamp overhead, glaring -->
+            <line x1="560" y1="-600" x2="560" y2="-60" stroke="#0c0e11" stroke-width="4"/>
+            <circle cx="560" cy="-20" r="320" fill="url(#fbGlare)"/>
+            <path d="M505,-60 L615,-60 L638,-18 L482,-18 Z" fill="#e9d9c2"/>
+
+            <!-- two more officers, standing back behind the table -->
+            <g fill="#14171b">
+              <g transform="translate(330 270) scale(.85)">
+                <path d="M-50,-90 Q-44,-118 0,-118 Q44,-118 50,-90 L58,150 L-58,150 Z"/>
+                <circle cx="0" cy="-146" r="26"/>
+                <path d="M-30,-160 L30,-160 L33,-172 Q0,-188 -33,-172 Z"/>
+                <rect x="-37" y="-163" width="74" height="7" rx="3"/>
+                <rect x="-8" y="-172" width="16" height="8" rx="1" fill="#8a7a4a"/>
+                <rect x="-30" y="-68" width="11" height="13" rx="1" fill="#8a7a4a"/>
+              </g>
+              <g transform="translate(738 262) scale(.9)">
+                <path d="M-50,-90 Q-44,-118 0,-118 Q44,-118 50,-90 L58,155 L-58,155 Z"/>
+                <circle cx="0" cy="-146" r="26"/>
+                <path d="M-30,-160 L30,-160 L33,-172 Q0,-188 -33,-172 Z"/>
+                <rect x="-37" y="-163" width="74" height="7" rx="3"/>
+                <rect x="-8" y="-172" width="16" height="8" rx="1" fill="#8a7a4a"/>
+                <rect x="19" y="-68" width="11" height="13" rx="1" fill="#8a7a4a"/>
+                <path d="M-50,-60 Q-80,-10 -60,40 L-44,34 Q-58,-4 -38,-44 Z"/>
+              </g>
+            </g>
+
+            <!-- the investigator, standing over the table, seen from table height -->
+            <path d="M468,402 L482,140 Q560,100 638,140 L652,402 Z" fill="var(--silhouette)"/>
+            <circle cx="560" cy="92" r="42" fill="var(--silhouette)"/>
+
+            <!-- the tabletop, running away from your eye -->
+            <polygon points="-600,400 1560,400 1560,1200 -600,1200" fill="url(#fbTable)"/>
+            <line x1="-600" y1="400" x2="1560" y2="400" stroke="#5a4636" stroke-width="3"/>
+            <g stroke="#241b16" stroke-width="3" opacity="0.6">
+              <line x1="480" y1="400" x2="-700" y2="1200"/>
+              <line x1="480" y1="400" x2="-150" y2="1200"/>
+              <line x1="480" y1="400" x2="330" y2="1200"/>
+              <line x1="480" y1="400" x2="800" y2="1200"/>
+              <line x1="480" y1="400" x2="1300" y2="1200"/>
+            </g>
+            <ellipse cx="560" cy="432" rx="330" ry="34" fill="#f4c983" opacity="0.14"/>
+            <polygon points="600,410 770,410 812,452 574,452" fill="#b89a64" filter="url(#fbBlurMid)"/>
+            <polygon points="290,412 420,406 444,440 280,448" fill="#d9cfbd" filter="url(#fbBlurMid)"/>
+
+            <!-- the officer holding you down: right up against you, out of focus -->
+            <g fill="#0d0f12" filter="url(#fbBlurMid)">
+              <path d="M790,-600 L1560,-600 L1560,1200 L930,1200 Q860,760 872,420 Q820,160 790,-600 Z"/>
+              <polygon points="872,300 952,340 720,1200 560,1200"/>
+            </g>
+
+            <!-- a sheet of the case file, inches from your eye -->
+            <polygon points="-420,600 160,660 260,900 -420,980" fill="#e7ded0" opacity="0.92" filter="url(#fbBlurNear)"/>
+
+          </g>
+          <rect class="fb-vig" x="-100" y="-100" width="1160" height="800" fill="url(#fbVig)"/>
+        </svg>
+
+        <!-- SHOT H: close on your own hands, flat on the table, apart. Local
+             hand coords: wrist at (0,0), fingers pointing away (-y). -->
+        <svg class="f-shot f-shotH" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+
+          <g class="fh-lift"><g class="fh-jolt"><g transform="rotate(-9 480 300)">
+            <rect x="-300" y="-300" width="1560" height="1200" fill="url(#fhTable)"/>
+            <ellipse cx="480" cy="110" rx="560" ry="210" fill="#f4c983" opacity="0.1"/>
+            <g stroke="#2a2019" stroke-width="3" fill="none" opacity="0.55">
+              <path d="M-300,40 Q300,20 1260,60"/>
+              <path d="M-300,190 Q400,170 1260,210"/>
+              <path d="M-300,330 Q420,310 1260,350"/>
+              <path d="M-300,480 Q380,460 1260,500"/>
+            </g>
+            <!-- the case file, scattered at the far edge -->
+            <g filter="url(#fhBlur)">
+              <polygon points="150,40 380,20 400,130 170,150" fill="#e7ded0"/>
+              <polygon points="560,10 790,30 770,140 545,120" fill="#b89a64"/>
+            </g>
+
+            <!-- cuffs, part 1: the double strands pass under your wrists, so
+                 they're drawn before the hands -->
+            <g class="fh-cuffs">
+              <g fill="none" stroke="url(#fhSteel)" stroke-width="9">
+                <path d="M244,434 A56,17 0 0 0 356,434"/>
+                <path d="M434,434 A56,17 0 0 0 546,434"/>
+              </g>
+            </g>
+
+            <!-- left hand: stays where it is -->
+            <g transform="translate(300 400) scale(1.15)">
+                <path d="M-54,62 L-62,320 L62,320 L54,62 Z" fill="#1b1f24"/>
+                <path d="M-42,0 L-47,70 L47,70 L42,0 Z" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="30" y="-84" width="22" height="72" rx="11" transform="rotate(38 41 -30)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-48" y="-150" width="21" height="68" rx="10.5" transform="rotate(-5 -38 -90)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-25" y="-178" width="22" height="94" rx="11" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-1" y="-186" width="22" height="102" rx="11" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="22" y="-172" width="21" height="88" rx="10.5" transform="rotate(4 32 -90)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <path d="M-42,2 C-50,-40 -50,-70 -46,-92 L44,-96 C46,-66 46,-36 42,2 Z" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <path d="M-34,-84 Q-20,-90 -6,-88 M0,-90 Q14,-94 28,-90" fill="none" stroke="#6e5646" stroke-width="2.5"/>
+                <path d="M-30,-60 Q0,-70 30,-62" fill="none" stroke="#c2a58c" stroke-width="4" opacity="0.6"/>
+            </g>
+
+            <!-- right hand: mirrored; dragged over to the cuff -->
+            <g class="fh-pull"><g transform="translate(660 400) scale(-1.15 1.15)">
+                <path d="M-54,62 L-62,320 L62,320 L54,62 Z" fill="#1b1f24"/>
+                <path d="M-42,0 L-47,70 L47,70 L42,0 Z" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="30" y="-84" width="22" height="72" rx="11" transform="rotate(38 41 -30)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-48" y="-150" width="21" height="68" rx="10.5" transform="rotate(-5 -38 -90)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-25" y="-178" width="22" height="94" rx="11" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-1" y="-186" width="22" height="102" rx="11" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="22" y="-172" width="21" height="88" rx="10.5" transform="rotate(4 32 -90)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <path d="M-42,2 C-50,-40 -50,-70 -46,-92 L44,-96 C46,-66 46,-36 42,2 Z" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <path d="M-34,-84 Q-20,-90 -6,-88 M0,-90 Q14,-94 28,-90" fill="none" stroke="#6e5646" stroke-width="2.5"/>
+                <path d="M-30,-60 Q0,-70 30,-62" fill="none" stroke="#c2a58c" stroke-width="4" opacity="0.6"/>
+            </g></g>
+
+            <!-- cuffs, part 2: housings, chain, and the jaws that swing over the wrists -->
+            <g class="fh-cuffs">
+              <!-- chain between the housings -->
+              <g fill="none" stroke="url(#fhSteel)" stroke-width="3.5">
+                <ellipse cx="383" cy="432" rx="8" ry="4.5"/>
+                <ellipse cx="395" cy="432" rx="8" ry="2"/>
+                <ellipse cx="407" cy="432" rx="8" ry="4.5"/>
+              </g>
+              <!-- housings (the ratchet blocks), with keyholes -->
+              <rect x="354" y="422" width="24" height="24" rx="4" fill="#8a929b" stroke="#2f353b" stroke-width="2"/>
+              <rect x="358" y="426" width="16" height="4" rx="2" fill="#c9d0d6"/>
+              <circle cx="366" cy="438" r="2.4" fill="#1f2328"/>
+              <rect x="412" y="422" width="24" height="24" rx="4" fill="#8a929b" stroke="#2f353b" stroke-width="2"/>
+              <rect x="416" y="426" width="16" height="4" rx="2" fill="#c9d0d6"/>
+              <circle cx="424" cy="438" r="2.4" fill="#1f2328"/>
+              <!-- hinge pins -->
+              <circle cx="244" cy="434" r="6" fill="#8a929b" stroke="#2f353b" stroke-width="2"/>
+              <circle cx="546" cy="434" r="6" fill="#8a929b" stroke="#2f353b" stroke-width="2"/>
+
+              <!-- the jaws: single strands with ratchet teeth, pivoting on the hinges -->
+              <g transform="translate(244 434)">
+                <g class="fh-jaw a">
+                  <path d="M0,0 A56,17 0 0 1 112,0" fill="none" stroke="url(#fhSteel)" stroke-width="9"/>
+                  <path d="M10,-7 A48,12 0 0 1 102,-7" fill="none" stroke="#3d444b" stroke-width="2" stroke-dasharray="2 4"/>
+                </g>
+              </g>
+              <g transform="translate(546 434)">
+                <g class="fh-jaw b">
+                  <path d="M0,0 A56,17 0 0 0 -112,0" fill="none" stroke="url(#fhSteel)" stroke-width="9"/>
+                  <path d="M-10,-7 A48,12 0 0 0 -102,-7" fill="none" stroke="#3d444b" stroke-width="2" stroke-dasharray="2 4"/>
+                </g>
+              </g>
+            </g>
+
+            <!-- the officer's gloved hand: grips your forearm from the right -->
+            <g class="fh-glove" fill="#0d0f12">
+              <path d="M360,470 Q330,462 300,468 Q274,474 262,490 Q258,502 272,504 L300,500 Q272,512 266,526 Q264,538 280,538 L312,528 Q292,544 296,556 Q302,564 318,558 L352,540 Q380,548 420,540 L760,600 L760,440 Q560,450 400,466 Z"/>
+            </g>
+          </g></g></g>
+
+          <rect x="-100" y="-100" width="1160" height="800" fill="url(#fbVig)" opacity="0.6"/>
+        </svg>
+
+        <div class="f-black"></div>
+        <div class="f-bar top"></div>
+        <div class="f-bar bottom"></div>
+        <div class="finale-hud"><span class="rec-dot"></span> <span>Interview feed · final</span></div>
+        <div class="finale-caption"></div>
+      </div>
+
+
+      <!-- ===== Finale: NOT PROVEN ===== -->
+      <div class="finale not-proven" data-ending="NOT_PROVEN" hidden>
+        <svg class="f-shot n-shot" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <g class="n-walk"><g class="n-rise">
+          <g transform="translate(0 -40)"><g class="n-cam">
+          <rect x="-200" y="-200" width="1360" height="570" fill="var(--wall)"/>
+          <rect x="-200" y="330" width="1360" height="40" fill="var(--wall-dark)" opacity="0.5"/>
+          <rect x="60" y="70" width="230" height="150" rx="2" fill="url(#fMirrorGrad)" stroke="#0a0c0f" stroke-width="6"/>
+          <rect x="-200" y="370" width="1360" height="470" fill="url(#fFloorGrad)"/>
+          <line x1="-200" y1="370" x2="1160" y2="370" stroke="#000" stroke-opacity="0.4"/>
+
+          <rect x="752" y="162" width="106" height="210" fill="#0a0c0f"/>
+          <g class="n-hall">
+            <rect x="758" y="168" width="94" height="202" fill="#c9d2d9"/>
+            <polygon points="758,370 852,370 930,470 690,470" fill="url(#fHallGrad)"/>
+          </g>
+          <rect class="n-door" x="758" y="168" width="94" height="202" fill="#1f242a" stroke="#101316" stroke-width="3"/>
+
+          <g class="n-inv">
+            <path d="M470,300 Q480,250 560,250 Q640,250 650,300 L660,420 L460,420 Z" fill="var(--silhouette)"/>
+            <circle cx="560" cy="228" r="34" fill="var(--silhouette)"/>
+          </g>
+          <!-- the investigator's arm, pointing you to the door -->
+          <g class="n-arm" fill="var(--silhouette)">
+            <path d="M630,290 L760,250 L766,266 L640,312 Z"/>
+            <circle cx="768" cy="257" r="10"/>
+          </g>
+
+          <g>
+            <line x1="560" y1="-200" x2="560" y2="118" stroke="#0c0e11" stroke-width="3"/>
+            <polygon points="440,420 680,420 560,120" fill="url(#fLampGlow)" opacity="0.6"/>
+            <path d="M520,118 L600,118 L622,150 L498,150 Z" fill="#e9d9c2"/>
+            <circle cx="560" cy="150" r="5" fill="#fff8e6"/>
+          </g>
+
+          <g>
+            <polygon points="300,470 660,470 760,600 200,600" fill="var(--table)"/>
+            <polygon points="300,470 660,470 668,486 292,486" fill="var(--table-edge)"/>
+            <!-- the case file, open; its cover flips shut on the spine -->
+            <polygon points="430,474 520,474 522,500 424,500" fill="#b89a64"/>
+            <polygon points="436,477 514,477 516,497 432,497" fill="#e7ded0"/>
+            <line x1="444" y1="484" x2="500" y2="484" stroke="#8a8070" stroke-width="2"/>
+            <line x1="444" y1="490" x2="490" y2="490" stroke="#8a8070" stroke-width="2"/>
+            <polygon class="n-cover" points="520,474 610,474 616,500 522,500" fill="#a88a55"/>
+          </g>
+
+          <g transform="translate(0 30) translate(480 600) scale(1.4) translate(-480 -600)">
+          <g class="n-wrists">
+            <path d="M200,600 L372,528 Q392,520 404,538 L416,560 L290,600 Z" fill="#1b1f24"/>
+            <path d="M760,600 L588,528 Q568,520 556,538 L544,560 L670,600 Z" fill="#1b1f24"/>
+            <path d="M398,524 Q430,508 462,516 Q478,524 470,540 Q458,556 428,560 Q408,562 400,548 Z" fill="#5a4a3e"/>
+            <path d="M562,524 Q530,508 498,516 Q482,524 490,540 Q502,556 532,560 Q552,562 560,548 Z" fill="#5a4a3e"/>
+            <path d="M404,524 Q432,512 460,518" fill="none" stroke="#7a6454" stroke-width="3"/>
+            <path d="M556,524 Q528,512 500,518" fill="none" stroke="#7a6454" stroke-width="3"/>
+          </g>
+          </g>
+          </g></g>
+          </g></g>
+
+          <!-- your own hand, coming up to push the door -->
+          <g class="n-push"><g transform="translate(560 640) scale(-1.9 1.9)">
+                <path d="M-54,62 L-62,320 L62,320 L54,62 Z" fill="#1b1f24"/>
+                <path d="M-42,0 L-47,70 L47,70 L42,0 Z" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="30" y="-84" width="22" height="72" rx="11" transform="rotate(38 41 -30)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-48" y="-150" width="21" height="68" rx="10.5" transform="rotate(-5 -38 -90)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-25" y="-178" width="22" height="94" rx="11" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-1" y="-186" width="22" height="102" rx="11" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="22" y="-172" width="21" height="88" rx="10.5" transform="rotate(4 32 -90)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <path d="M-42,2 C-50,-40 -50,-70 -46,-92 L44,-96 C46,-66 46,-36 42,2 Z" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <path d="M-34,-84 Q-20,-90 -6,-88 M0,-90 Q14,-94 28,-90" fill="none" stroke="#6e5646" stroke-width="2.5"/>
+                <path d="M-30,-60 Q0,-70 30,-62" fill="none" stroke="#c2a58c" stroke-width="4" opacity="0.6"/>
+          </g></g>
+        </svg>
+        <div class="n-white"></div>
+        <div class="f-bar top"></div>
+        <div class="f-bar bottom"></div>
+        <div class="finale-hud"><span class="rec-dot"></span> <span>Interview feed · final</span></div>
+        <div class="finale-caption"></div>
+      </div>
+
+      <!-- ===== Finale: POLICY VIOLATION ===== -->
+      <div class="finale policy" data-ending="POLICY_VIOLATION_ONLY" hidden>
+        <!-- SHOT A: the room; a form slides across to you -->
+        <svg class="f-shot p-shotA" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <g transform="translate(0 -40)">
+          <rect x="-200" y="-200" width="1360" height="570" fill="var(--wall)"/>
+          <rect x="-200" y="330" width="1360" height="40" fill="var(--wall-dark)" opacity="0.5"/>
+          <rect x="60" y="70" width="230" height="150" rx="2" fill="url(#fMirrorGrad)" stroke="#0a0c0f" stroke-width="6"/>
+          <rect x="-200" y="370" width="1360" height="470" fill="url(#fFloorGrad)"/>
+          <line x1="-200" y1="370" x2="1160" y2="370" stroke="#000" stroke-opacity="0.4"/>
+
+          <rect x="752" y="162" width="106" height="210" fill="#0a0c0f"/>
+          <g class="p-hall">
+            <rect x="758" y="168" width="94" height="202" fill="#c9d2d9"/>
+            <polygon points="758,370 852,370 930,470 690,470" fill="url(#fHallGrad)"/>
+          </g>
+          <rect class="p-door" x="758" y="168" width="94" height="202" fill="#1f242a" stroke="#101316" stroke-width="3"/>
+
+          <g class="p-inv">
+            <path d="M470,300 Q480,250 560,250 Q640,250 650,300 L660,420 L460,420 Z" fill="var(--silhouette)"/>
+            <circle cx="560" cy="228" r="34" fill="var(--silhouette)"/>
+          </g>
+
+          <g>
+            <line x1="560" y1="-200" x2="560" y2="118" stroke="#0c0e11" stroke-width="3"/>
+            <polygon points="440,420 680,420 560,120" fill="url(#fLampGlow)" opacity="0.6"/>
+            <path d="M520,118 L600,118 L622,150 L498,150 Z" fill="#e9d9c2"/>
+            <circle cx="560" cy="150" r="5" fill="#fff8e6"/>
+          </g>
+
+          <g>
+            <polygon points="300,470 660,470 760,600 200,600" fill="var(--table)"/>
+            <polygon points="300,470 660,470 668,486 292,486" fill="var(--table-edge)"/>
+            <polygon points="330,474 410,474 414,498 324,498" fill="#b89a64"/>
+            <polygon class="p-sheet" points="430,478 540,478 546,504 424,504" fill="#efe8da"/>
+          </g>
+
+          <g transform="translate(0 30) translate(480 600) scale(1.4) translate(-480 -600)">
+            <path d="M200,600 L372,528 Q392,520 404,538 L416,560 L290,600 Z" fill="#1b1f24"/>
+            <path d="M760,600 L588,528 Q568,520 556,538 L544,560 L670,600 Z" fill="#1b1f24"/>
+            <path d="M398,524 Q430,508 462,516 Q478,524 470,540 Q458,556 428,560 Q408,562 400,548 Z" fill="#5a4a3e"/>
+            <path d="M562,524 Q530,508 498,516 Q482,524 490,540 Q502,556 532,560 Q552,562 560,548 Z" fill="#5a4a3e"/>
+            <path d="M404,524 Q432,512 460,518" fill="none" stroke="#7a6454" stroke-width="3"/>
+            <path d="M556,524 Q528,512 500,518" fill="none" stroke="#7a6454" stroke-width="3"/>
+          </g>
+          </g>
+        </svg>
+
+        <!-- SHOT P: your hands, the notice, the pen -->
+        <svg class="f-shot p-shotP" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <g transform="rotate(-4 480 300)">
+            <rect x="-300" y="-300" width="1560" height="1200" fill="url(#fhTable)"/>
+            <ellipse cx="480" cy="160" rx="560" ry="230" fill="#f4c983" opacity="0.1"/>
+            <g stroke="#2a2019" stroke-width="3" fill="none" opacity="0.55">
+              <path d="M-300,60 Q300,40 1260,80"/>
+              <path d="M-300,420 Q380,400 1260,440"/>
+              <path d="M-300,560 Q400,540 1260,580"/>
+            </g>
+
+            <!-- the notice, and the investigator's hand that takes it back -->
+            <g class="p-take">
+              <g transform="rotate(-3 480 250)">
+                <rect x="315" y="120" width="330" height="250" fill="#efe8da" stroke="#b9ae98" stroke-width="2"/>
+                <text x="480" y="152" text-anchor="middle" font-family="'Courier Prime', monospace" font-weight="700" font-size="15" fill="#2a2317">NOTICE OF DISCIPLINARY ACTION</text>
+                <line x1="335" y1="162" x2="625" y2="162" stroke="#2a2317" stroke-width="1.5"/>
+                <g font-family="'Courier Prime', monospace" font-size="12" fill="#2a2317">
+                  <text x="338" y="188">Finding: expense policy violation</text>
+                  <text x="338" y="208">Action: written warning on file</text>
+                  <text x="338" y="228">Unsupported claims to be repaid</text>
+                </g>
+                <g fill="#cfc6b4">
+                  <rect x="338" y="244" width="270" height="6" rx="3"/>
+                  <rect x="338" y="258" width="240" height="6" rx="3"/>
+                  <rect x="338" y="272" width="256" height="6" rx="3"/>
+                  <rect x="338" y="286" width="180" height="6" rx="3"/>
+                </g>
+                <line x1="395" y1="338" x2="590" y2="338" stroke="#6b5f45" stroke-width="1.5"/>
+                <text x="395" y="354" font-family="'Courier Prime', monospace" font-size="10" fill="#6b5f45">Employee signature</text>
+                <path class="p-sig" pathLength="1" d="M410,332 c6,-22 18,-26 16,-4 c-2,14 8,12 16,-6 c6,-14 14,-14 14,2 c0,12 10,8 18,-8 c8,-16 16,-12 12,4 c-3,12 10,10 20,-4 c6,-8 14,-10 18,-2 l30,-6" fill="none" stroke="#1d2a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+              </g>
+              <g class="p-invhand" fill="#0d0f12">
+                <path d="M436,-60 L526,-60 L518,108 Q506,124 482,124 Q456,122 448,108 Z"/>
+                <rect x="446" y="104" width="15" height="34" rx="7"/>
+                <rect x="463" y="106" width="15" height="38" rx="7"/>
+                <rect x="480" y="106" width="15" height="38" rx="7"/>
+                <rect x="497" y="104" width="15" height="33" rx="7"/>
+              </g>
+            </g>
+
+            <!-- your left hand, resting -->
+            <g transform="translate(215 500) scale(1.1)">
+                <path d="M-54,62 L-62,320 L62,320 L54,62 Z" fill="#1b1f24"/>
+                <path d="M-42,0 L-47,70 L47,70 L42,0 Z" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="30" y="-84" width="22" height="72" rx="11" transform="rotate(38 41 -30)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-48" y="-150" width="21" height="68" rx="10.5" transform="rotate(-5 -38 -90)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-25" y="-178" width="22" height="94" rx="11" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-1" y="-186" width="22" height="102" rx="11" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="22" y="-172" width="21" height="88" rx="10.5" transform="rotate(4 32 -90)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <path d="M-42,2 C-50,-40 -50,-70 -46,-92 L44,-96 C46,-66 46,-36 42,2 Z" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <path d="M-34,-84 Q-20,-90 -6,-88 M0,-90 Q14,-94 28,-90" fill="none" stroke="#6e5646" stroke-width="2.5"/>
+                <path d="M-30,-60 Q0,-70 30,-62" fill="none" stroke="#c2a58c" stroke-width="4" opacity="0.6"/>
+            </g>
+
+            <!-- the pen, lying on the table -->
+            <g class="p-pen">
+              <line x1="600" y1="420" x2="700" y2="380" stroke="#1d2a5a" stroke-width="10" stroke-linecap="round"/>
+              <line x1="600" y1="420" x2="610" y2="416" stroke="#c9d0d6" stroke-width="6" stroke-linecap="round"/>
+              <line x1="672" y1="384" x2="694" y2="376" stroke="#c9d0d6" stroke-width="3"/>
+            </g>
+
+            <!-- your right hand; origin = the pen tip -->
+            <g class="p-writer">
+              <g transform="translate(95 150) rotate(-25) scale(-1.1 1.1)">
+                <path d="M-54,62 L-62,320 L62,320 L54,62 Z" fill="#1b1f24"/>
+                <path d="M-42,0 L-47,70 L47,70 L42,0 Z" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="30" y="-84" width="22" height="72" rx="11" transform="rotate(38 41 -30)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-48" y="-150" width="21" height="68" rx="10.5" transform="rotate(-5 -38 -90)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-25" y="-178" width="22" height="94" rx="11" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="-1" y="-186" width="22" height="102" rx="11" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <rect x="22" y="-172" width="21" height="88" rx="10.5" transform="rotate(4 32 -90)" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <path d="M-42,2 C-50,-40 -50,-70 -46,-92 L44,-96 C46,-66 46,-36 42,2 Z" fill="#9a7f69" stroke="#1a1410" stroke-width="3"/>
+                <path d="M-34,-84 Q-20,-90 -6,-88 M0,-90 Q14,-94 28,-90" fill="none" stroke="#6e5646" stroke-width="2.5"/>
+                <path d="M-30,-60 Q0,-70 30,-62" fill="none" stroke="#c2a58c" stroke-width="4" opacity="0.6"/>
+              </g>
+              <g class="p-heldpen">
+                <line x1="0" y1="0" x2="95" y2="-62" stroke="#1d2a5a" stroke-width="10" stroke-linecap="round"/>
+                <line x1="0" y1="0" x2="10" y2="-6.5" stroke="#c9d0d6" stroke-width="6" stroke-linecap="round"/>
+              </g>
+            </g>
+          </g>
+          <rect x="-100" y="-100" width="1160" height="800" fill="url(#fbVig)" opacity="0.55"/>
+        </svg>
+        <div class="f-black"></div>
+        <div class="f-bar top"></div>
+        <div class="f-bar bottom"></div>
+        <div class="finale-hud"><span class="rec-dot"></span> <span>Interview feed · final</span></div>
+        <div class="finale-caption"></div>
+      </div>
+
       <div class="verdict-stamp" id="verdictStamp">&mdash;</div>
-      <div class="score-readout">Final case score: <b id="finalScore">0</b> / <span id="finalThreshold">80</span></div>
-      <div class="aftermath" id="aftermathText">&mdash;</div>
-      <div class="resolution-actions">
+      <div class="score-readout reveal" style="--i:0">Final case score: <b id="finalScore">0</b> / <span id="finalThreshold">80</span></div>
+
+      <!-- Why the case ended this way: the resolution pass's own reasoning,
+           the score it came from, and the record behind it. -->
+      <div class="case-report reveal" id="caseReport" style="--i:1">
+        <section class="cr-block">
+          <h3>Finding <span class="cr-confidence" id="crConfidence"></span></h3>
+          <p class="cr-reasoning" id="crReasoning"></p>
+        </section>
+
+        <section class="cr-block">
+          <h3>How the score was reached</h3>
+          <table class="cr-score">
+            <tr><td>Interview findings</td><td id="crInterview">0</td></tr>
+            <tr><td>Checked after the interview</td><td id="crVerify">+0</td></tr>
+            <tr id="crRefundRow" hidden><td>Excuses that checked out</td><td id="crRefund">0</td></tr>
+            <tr class="cr-total"><td>Final score <span id="crThresholdNote"></span></td><td id="crFinal">0</td></tr>
+          </table>
+        </section>
+
+        <section class="cr-block" id="crFindingsBlock">
+          <h3>What the interview established</h3>
+          <ol class="cr-list" id="crFindings"></ol>
+        </section>
+
+        <section class="cr-block" id="crVerifyBlock">
+          <h3>What the records showed</h3>
+          <ol class="cr-list" id="crVerifications"></ol>
+        </section>
+      </div>
+
+      <h3 class="aftermath-head reveal" style="--i:2">Aftermath</h3>
+      <div class="aftermath reveal" id="aftermathText" style="--i:2">&mdash;</div>
+      <div class="resolution-actions reveal" style="--i:3">
         <button class="begin-btn" id="restartBtn">↻ Run another interview</button>
         <button class="link-btn" id="backToFileBtn">← Review case file</button>
       </div>
@@ -850,10 +2060,257 @@
 
   // Visual mapping only — colors/labels per real FinalOutcome (models.py).
   var VERDICT_LOOKS = {
-    CAUGHT:                 { label:'CAUGHT',           color:'var(--accent-oxblood)', lights:true },
-    NOT_PROVEN:             { label:'NOT PROVEN',       color:'var(--accent-cool)',    lights:false },
-    POLICY_VIOLATION_ONLY:  { label:'POLICY VIOLATION', color:'var(--accent-amber)',   lights:false }
+    CAUGHT:                 { label:'CAUGHT',           color:'var(--accent-oxblood)', lights:false,
+                              finale:{ caption:'Taken into custody.', stampAt:4700, revealAt:5300, cues:[
+                                { at:850,  play:playThud },       // case file slammed down
+                                { at:1000, play:playDoorBang },   // door flung open
+                                { at:1550, play:playWhoosh },     // grabbed, spun down
+                                { at:1950, play:playThud },       // face into the table
+                                { at:2850, play:playCuffClick },  // left wrist
+                                { at:3300, play:playCuffClick },  // right wrist
+                                { at:3550, play:playWhoosh },     // hauled up
+                                { at:4760, play:playThud }        // the stamp
+                              ] } },
+    NOT_PROVEN:             { label:'NOT PROVEN',       color:'var(--accent-cool)',    lights:false,
+                              finale:{ caption:'Free to go. For now.', stampAt:4700, revealAt:5300, cues:[
+                                { at:1500, play:function(){ playThud(0.4); } },  // file flipped shut
+                                { at:2300, play:playChairScrape },               // you stand
+                                { at:2950, play:playStep },
+                                { at:3250, play:playStep },
+                                { at:3550, play:playStep },
+                                { at:3650, play:playDoorCreak },                 // you push the door
+                                { at:4760, play:playThud }                       // the stamp
+                              ] } },
+    POLICY_VIOLATION_ONLY:  { label:'POLICY VIOLATION', color:'var(--accent-amber)',   lights:false,
+                              finale:{ caption:'Written warning. Signed.', stampAt:4700, revealAt:5300, cues:[
+                                { at:400,  play:function(){ playWhoosh(0.12); } }, // form slid across
+                                { at:1900, play:playClack },                        // pen picked up
+                                { at:2100, play:playScribble },                     // signing
+                                { at:3050, play:function(){ playWhoosh(0.15); } }, // form taken away
+                                { at:4760, play:playThud }                          // the stamp
+                              ] } }
   };
+
+  // Two quick metallic ticks: the ratchet of a cuff closing.
+  function playCuffClick(){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+    [0, 0.07].forEach(function(offset){
+      var t = audioCtx.currentTime + offset;
+      var len = Math.floor(audioCtx.sampleRate * 0.03);
+      var buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+      var data = buffer.getChannelData(0);
+      for (var i = 0; i < len; i++){ data[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3); }
+      var src = audioCtx.createBufferSource();
+      src.buffer = buffer;
+      var filter = audioCtx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 4200;
+      filter.Q.value = 6;
+      var gain = audioCtx.createGain();
+      gain.gain.value = 0.5;
+      src.connect(filter).connect(gain).connect(audioCtx.destination);
+      src.start(t);
+    });
+  }
+
+  // Fast movement past the ear: a band of noise sweeping upward.
+  function playWhoosh(peak){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+    var t = audioCtx.currentTime;
+    var len = Math.floor(audioCtx.sampleRate * 0.35);
+    var buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < len; i++){ data[i] = Math.random()*2-1; }
+    var src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    var bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1.5;
+    bp.frequency.setValueAtTime(300, t);
+    bp.frequency.exponentialRampToValueAtTime(2200, t + 0.3);
+    var g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak || 0.35, t + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+    src.connect(bp).connect(g).connect(audioCtx.destination);
+    src.start(t);
+  }
+
+  // Door flung into the wall: a sharp mid-range crack over a short low knock.
+  function playDoorBang(){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+    var t = audioCtx.currentTime;
+    var len = Math.floor(audioCtx.sampleRate * 0.12);
+    var buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < len; i++){ data[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2.5); }
+    var src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    var bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 900;
+    bp.Q.value = 1.2;
+    var g = audioCtx.createGain();
+    g.gain.value = 0.45;
+    src.connect(bp).connect(g).connect(audioCtx.destination);
+    src.start(t);
+
+    var osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.exponentialRampToValueAtTime(70, t + 0.15);
+    var og = audioCtx.createGain();
+    og.gain.setValueAtTime(0.3, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    osc.connect(og).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.22);
+  }
+
+  // Low thud (the file slam, the stamp): a falling sine plus a short muffled burst.
+  function playThud(vol){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+    vol = vol || 1;
+    var t = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(110, t);
+    osc.frequency.exponentialRampToValueAtTime(38, t + 0.3);
+    var og = audioCtx.createGain();
+    og.gain.setValueAtTime(0.6 * vol, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    osc.connect(og).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.42);
+
+    var len = Math.floor(audioCtx.sampleRate * 0.08);
+    var buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < len; i++){ data[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2); }
+    var src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    var lp = audioCtx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 600;
+    var ng = audioCtx.createGain();
+    ng.gain.value = 0.5 * vol;
+    src.connect(lp).connect(ng).connect(audioCtx.destination);
+    src.start(t);
+  }
+
+  // A footstep on a hard floor: short, low, quiet.
+  function playStep(){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+    var t = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(95, t);
+    osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+    var g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.25, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.14);
+  }
+
+  // Chair legs dragged back on the floor: a juddering low band of noise.
+  function playChairScrape(){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+    var t = audioCtx.currentTime;
+    var dur = 0.45;
+    var len = Math.floor(audioCtx.sampleRate * dur);
+    var buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < len; i++){
+      var judder = 0.55 + 0.45 * Math.sin(i / audioCtx.sampleRate * 2 * Math.PI * 38);
+      data[i] = (Math.random()*2-1) * judder;
+    }
+    var src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    var bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 420;
+    bp.Q.value = 3;
+    var g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.45, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp).connect(g).connect(audioCtx.destination);
+    src.start(t);
+  }
+
+  // A door hinge giving way: a low, rising, narrow-band creak.
+  function playDoorCreak(){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+    var t = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(60, t);
+    osc.frequency.linearRampToValueAtTime(115, t + 0.5);
+    var bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 900;
+    bp.Q.value = 8;
+    var g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.35, t + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    osc.connect(bp).connect(g).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.56);
+  }
+
+  // A pen on paper: a string of short, high, scratchy strokes.
+  function playScribble(){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+    var t0 = audioCtx.currentTime;
+    for (var k = 0; k < 9; k++){
+      var t = t0 + k * 0.085 + Math.random() * 0.02;
+      var len = Math.floor(audioCtx.sampleRate * 0.06);
+      var buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+      var data = buffer.getChannelData(0);
+      for (var i = 0; i < len; i++){ data[i] = (Math.random()*2-1) * Math.sin(Math.PI * i / len); }
+      var src = audioCtx.createBufferSource();
+      src.buffer = buffer;
+      var bp = audioCtx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2600 + Math.random() * 1200;
+      bp.Q.value = 2;
+      var g = audioCtx.createGain();
+      g.gain.value = 0.14;
+      src.connect(bp).connect(g).connect(audioCtx.destination);
+      src.start(t);
+    }
+  }
+
+  var finaleTimers = [];
+  function playFinale(outcome, v){
+    var card = document.getElementById('resolutionScreen');
+    finaleTimers.forEach(clearTimeout);
+    finaleTimers = [];
+    document.querySelectorAll('.finale').forEach(function(f){
+      f.classList.remove('play');
+      f.hidden = true;
+    });
+    card.classList.remove('has-finale');
+    card.style.removeProperty('--stamp-at');
+    card.style.removeProperty('--reveal-at');
+
+    var finale = v.finale && document.querySelector('.finale[data-ending="' + outcome + '"]');
+    if (!finale) return;
+    finale.hidden = false;
+    card.classList.add('has-finale');
+    card.style.setProperty('--stamp-at', v.finale.stampAt + 'ms');
+    card.style.setProperty('--reveal-at', v.finale.revealAt + 'ms');
+    finale.querySelector('.finale-caption').textContent = v.finale.caption;
+    void finale.offsetWidth;
+    finale.classList.add('play');
+    if (reducedMotion) return;
+    v.finale.cues.forEach(function(cue){
+      finaleTimers.push(setTimeout(cue.play, cue.at));
+    });
+  }
 
   var room = document.getElementById('room');
   var camera = document.getElementById('camera');
@@ -1097,20 +2554,87 @@
     });
   }
 
+  var VERIFY_LABELS = {
+    confirmed:'Confirmed', disproved:'Disproved', inconclusive:'Inconclusive', not_material:'Not material'
+  };
+
+  function signed(n){ return (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n); }
+
+  function reportRow(tag, tagMuted, text, pts, sub){
+    var li = document.createElement('li');
+    var t = document.createElement('span');
+    t.className = 'cr-tag' + (tagMuted ? ' muted' : '');
+    t.textContent = tag;
+    var body = document.createElement('span');
+    body.textContent = text;
+    var p = document.createElement('span');
+    p.className = 'cr-pts';
+    p.textContent = pts ? signed(pts) : '';
+    li.append(t, body, p);
+    if (sub){
+      var s = document.createElement('span');
+      s.className = 'cr-sub';
+      s.textContent = sub;
+      li.appendChild(s);
+    }
+    return li;
+  }
+
+  function renderCaseReport(res){
+    document.getElementById('crReasoning').textContent = res.reasoning || '';
+    document.getElementById('crConfidence').textContent =
+      res.confidence ? res.confidence + ' confidence' : '';
+
+    var interview = res.interview_score || 0;
+    var verify = res.verification_score_delta || 0;
+    // Whatever's left is the refund for excuses verification confirmed true
+    // (resolution.py gives back their in-room suspicion points).
+    var refund = res.final_score - interview - verify;
+    document.getElementById('crInterview').textContent = interview;
+    document.getElementById('crVerify').textContent = signed(verify);
+    document.getElementById('crRefundRow').hidden = refund === 0;
+    document.getElementById('crRefund').textContent = signed(refund);
+    document.getElementById('crFinal').textContent = res.final_score;
+    document.getElementById('crThresholdNote').textContent = '(arrest at ' + res.threshold + ')';
+
+    var findings = res.findings || [];
+    var fList = document.getElementById('crFindings');
+    fList.innerHTML = '';
+    findings.forEach(function(f){
+      fList.appendChild(reportRow(f.tag, false, f.text, f.points, 'Question ' + f.turn));
+    });
+    document.getElementById('crFindingsBlock').hidden = findings.length === 0;
+
+    var checks = res.verifications || [];
+    var vList = document.getElementById('crVerifications');
+    vList.innerHTML = '';
+    checks.forEach(function(v){
+      vList.appendChild(reportRow(VERIFY_LABELS[v.status] || v.status, !(v.points > 0), v.claim, v.points, v.basis));
+    });
+    document.getElementById('crVerifyBlock').hidden = checks.length === 0;
+  }
+
   function populateResolution(res){
     var v = VERDICT_LOOKS[res.outcome] || VERDICT_LOOKS.NOT_PROVEN;
 
     document.getElementById('finalScore').textContent = res.final_score;
     document.getElementById('finalThreshold').textContent = res.threshold;
     document.getElementById('aftermathText').textContent = res.aftermath;
+    renderCaseReport(res);
+
+    playFinale(VERDICT_LOOKS[res.outcome] ? res.outcome : 'NOT_PROVEN', v);
 
     var stamp = document.getElementById('verdictStamp');
     stamp.style.setProperty('--verdict-color', v.color);
     stamp.textContent = v.label;
+    stamp.classList.toggle('long', v.label.length > 12);
     stamp.style.animation = 'none'; void stamp.offsetWidth; stamp.style.animation = '';
 
     var card = document.getElementById('resolutionScreen');
     card.classList.remove('impact'); void card.offsetWidth; card.classList.add('impact');
+    card.querySelectorAll('.reveal').forEach(function(el){
+      el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    });
 
     var lights = document.getElementById('copLights');
     lights.classList.remove('on');
@@ -1230,6 +2754,38 @@
   });
 
   loadCase();
+
+  // Dev preview: /?ending=CAUGHT (or NOT_PROVEN, POLICY_VIOLATION_ONLY) jumps
+  // straight to that resolution screen with placeholder text, so an ending can
+  // be checked without playing a full interview. Click the photo to replay it
+  // (the click also unlocks sound, which browsers block until a user gesture).
+  var previewEnding = new URLSearchParams(location.search).get('ending');
+  if (previewEnding && VERDICT_LOOKS[previewEnding]){
+    // Placeholder content, clearly marked — only the layout is real here.
+    var previewRes = {
+      outcome: previewEnding, final_score: 86, threshold: 80,
+      interview_score: 67, verification_score_delta: 23,
+      confidence: 'preview',
+      reasoning: 'Preview text. In a real game this is the resolution pass\'s reasoning for the outcome, written from the interview record and the verification results below.',
+      aftermath: 'Preview of the ' + previewEnding + ' ending. In a real game this is the aftermath written by the resolution pass.',
+      findings: [
+        { tag:'CONTRADICTION', text:'Preview finding: a statement that conflicted with an earlier answer.', turn:3, points:15 },
+        { tag:'EVASION', text:'Preview finding: a direct question that went unanswered.', turn:5, points:8 }
+      ],
+      verifications: [
+        { claim:'Preview claim checked against the records.', status:'disproved', basis:'Preview basis: what the records showed.', points:15 },
+        { claim:'Preview excuse that turned out to be true.', status:'confirmed', basis:'Preview basis.', points:0 }
+      ]
+    };
+    populateResolution(previewRes);
+    showScreen('resolution');
+    document.querySelectorAll('.finale').forEach(function(f){
+      f.addEventListener('click', function(){
+        ensureAudio();
+        populateResolution(previewRes);
+      });
+    });
+  }
 })();
 </script>
 </body>
