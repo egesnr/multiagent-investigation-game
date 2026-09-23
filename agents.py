@@ -36,6 +36,7 @@ from models import (
     GameState,
     RealityGateResult,
     SpeakerLine,
+    SuspectNarrative,
     EvidenceRelation,
     format_facts,
 )
@@ -120,6 +121,9 @@ extractor_prompt = ChatPromptTemplate.from_messages([
 Do not invent details.
 
 ATOMIC CLAIM RULE:
+- List every proposition in the answer FIRST, then build claims from that list.
+  An answer that contradicts itself contains both halves, and both belong in
+  the list — taking the first and stopping loses whichever half came second.
 - Split compound answers into separate factual claims.
 - One claim should contain one proposition only.
 - Do not bundle an explanation with the underlying fact.
@@ -139,31 +143,6 @@ Extract exact meanings only.
   claims of importance, exaggerated value statements) and convert them into a
   literal checkable fact. If a statement is rhetorical/emotional posturing rather
   than a factual assertion, set checkable=false or omit it as a claim entirely.
-
-RULE 2b — DID THEY ANSWER THE QUESTION?
-Before anything else, decide whether this answer addressed the question that
-was actually asked, and record it in engagement.
-
-ANSWERED covers more than it looks like. A lie is an answer. A hostile answer
-is an answer. A partial, vague or obviously false account is an answer. "I
-can't remember" is an answer when the question was about their memory.
-
-DODGED is when the investigator asked something and was left holding it: a
-refusal, an insult instead of a reply, a change of subject, a complaint about
-the question, or an account of something else. Name what they were asked about
-in dodged_subject, reusing a subject already on record when it is the same
-topic.
-
-Then dodge_settles_fact, and be careful here, because the two cases are
-different in kind:
-- The question asked them to PRODUCE or ACCOUNT FOR something that either
-  exists or does not — a receipt, a name, a date, a document, a witness.
-  Refusing to produce it is evidence it does not exist. TRUE.
-- The question asked them to admit wrongdoing, or say what they intended,
-  knew, or meant. Silence establishes NOTHING here. A refusal to confess is
-  never a confession, and "I don't know" to "did you do it" is not a yes.
-  FALSE.
-If you are unsure which it is, it is FALSE.
 
 RULE 3 — SUBJECT FIRST, THEN STATE DIFFING:
 The record is organised by SUBJECT, not by sentence. Before writing a claim's
@@ -813,7 +792,13 @@ Recent moves already made:
 
 Questions remaining: {remaining}
 Case strength: {score}/{threshold}
-Last turn: +{last_turn_delta}, usefulness={last_turn_usefulness}"""
+Last turn: +{last_turn_delta}, usefulness={last_turn_usefulness}
+
+PREVIOUSLY IDENTIFIED CONTRADICTIONS (do not repeat these):
+{prior_contradictions}
+
+HAS THE UNFALSIFIABLE-ACCOUNT PATTERN ALREADY BEEN FLAGGED?
+{already_flagged_unfalsifiable}"""
 
 
 skeptic_prompt = ChatPromptTemplate.from_messages([
@@ -894,15 +879,30 @@ the first question — and from that you decide what to do next.
 Work in the order the fields are listed. Each one is meant to change what you
 write in the ones after it.
 
-1 — THE ACCOUNT
+1 — DID THEY ANSWER YOU?
+Write what your last question demanded, then what they actually offered, in
+their terms, and only then whether the second addresses the first.
+
+Responsiveness is the whole test, and it is not the same as belief. A lie that
+engages with the question is an answer. So is a hostile one, a vague one, a
+partial one, and one you are about to disprove in the next breath. You are not
+asking whether they are telling the truth — you are asking whether they
+engaged. Only a reply that changes the subject, complains about the question,
+or tells you to go and look it up yourself is a non-answer, however many
+on-topic words it contains.
+
+When it is not an answer, name the subject you asked about, at the granularity
+you asked it.
+
+2 — THE ACCOUNT
 Update your running picture of what the suspect says happened, in their logic.
 
-2 — WHAT YOU HAVEN'T USED
+3 — WHAT YOU HAVEN'T USED
 Walk the known facts one at a time and list the ones never yet put to the
 suspect. This is a checklist, not a judgment. An interview that ends with half
 the file unused was not an interview.
 
-3 — WHAT FOLLOWS
+4 — WHAT FOLLOWS
 Draw the conclusions nobody has stated yet, from the facts, the policy rules
 and the suspect's own words together. Do the arithmetic where it bites — an
 amount against a spending cap, a date against an approved itinerary, a delay
@@ -932,21 +932,22 @@ about how such things normally work is legitimate and belongs here. Stating
 that a particular record exists or says something is not, unless it is in the
 facts.
 
-4 — THE SUSPECT AGAINST THEMSELVES
-Only the suspect's own words can contradict each other. Use the SUSPECT'S OWN
-WORDS list, never the investigator's questions: your own side often paraphrases
-the suspect's position, sometimes wrongly, and a suspect correcting a
-mischaracterisation is not contradicting themselves.
-Flag only real tension — a walked-back denial, a detail that quietly changed.
-Not an unverified claim, not ordinary added detail, not an inability to recall,
-name or produce something. That last pattern has exactly one home,
-unfalsifiable_account, and must never also appear as a contradiction.
-Set unfalsifiable_account once and only once, when the account has become one
-where nothing in it can be checked by anyone. A suspect who simply refuses to
-answer is stonewalling and is handled elsewhere; this is for one who answers
-freely and says nothing checkable.
+5 — THE SUSPECT AGAINST THEMSELVES
+Only the suspect's own words can contradict each other. Two of THEIR statements,
+never their statement against a record — that comparison belongs to the Checker,
+it has already been made this turn, and making it again here scores the same
+disagreement twice under a different name. If your reason for calling something
+a contradiction mentions a fact, a record or a document, it is not one.
+Flag only real tension: a walked-back denial, a detail that quietly changed, a
+claim that only made sense given something since taken back. Not an unproven
+claim, not ordinary added detail, not an inability to recall, name or produce
+something — that pattern has one home, unfalsifiable_account, and belongs
+nowhere else.
+Set unfalsifiable_account once and only once, when nothing in the account can be
+checked by anyone. Someone who simply refuses to answer is stonewalling and is
+handled elsewhere; this is for one who answers freely and says nothing checkable.
 
-5 — THE MOVE
+6 — THE MOVE
 Two colleagues have already argued this turn, independently, neither having
 seen the other's answer. Their reads are below. Adjudicate between them and
 commit — and say honestly which one actually moved you, in
@@ -990,11 +991,7 @@ more of the same.
 - Never propose fetching a document, calling a witness or checking a record.
   Everything you decide is something to ASK or CONFRONT, in this room, now.
 
-PREVIOUSLY IDENTIFIED CONTRADICTIONS (do not repeat these):
-{prior_contradictions}
-
-HAS THE UNFALSIFIABLE-ACCOUNT PATTERN ALREADY BEEN FLAGGED?
-{already_flagged_unfalsifiable}"""
+"""
     ),
     (
         "human",
@@ -1075,7 +1072,6 @@ def run_investigator_mind(
         if state.unfalsifiable_flagged else
         "No — not yet flagged."
     )
-
     chain = mind_prompt | get_llm(0.3).with_structured_output(InvestigatorMind)
     mind = invoke_with_retry(chain, context)
 

@@ -7,7 +7,6 @@ import json
 from models import (
     CaseFile,
     CheckResult,
-    AnswerEngagement,
     ClaimNoveltyStatus,
     ClaimStatus,
     ClaimType,
@@ -256,12 +255,15 @@ def run_turn(
         subject_map=subject_map,
     )
 
-    # One call now does what four used to: holds the account as one story,
-    # argues both sides, and picks the next move. It runs HERE, after the
-    # Checker, rather than before it as narrative synthesis used to — so the
-    # same head that decides what to ask next can see what this turn's answer
-    # just produced. See agents.run_investigator_mind for why the split was
-    # the problem rather than the structure.
+    # One call holds the account as one story, argues both sides, and picks the
+    # next move. It runs after the Checker so the head choosing the next
+    # question can see what this answer just produced.
+    #
+    # Self-contradiction detection lives here rather than in a starved call of
+    # its own. Separating it — giving it the suspect's words and nothing else —
+    # did stop it comparing him to the records, and also stopped it finding
+    # anything: established findings went 16 to 0 on the same answers. Holding
+    # the whole interview is what makes it able to find a walked-back denial.
     mind, war_room = run_investigator_mind(
         state, findings_this_turn=results, return_debug=True
     )
@@ -347,21 +349,22 @@ def run_turn(
         if item.subject and item.subject.strip() in state.dodge_fact_points
     ]
 
-    dodged = (
-        extracted.dodged_subject
-        if extracted.engagement == AnswerEngagement.DODGED
-        else None
-    )
+    # The Lead judges responsiveness, not the Extractor: both form the view,
+    # and only the Lead — which holds the whole interview, the facts and the
+    # policy — gets it right. See agents.mind_prompt section 1.
+    dodged = mind.subject_dodged
     if dodged:
-        settles = "settles a fact" if extracted.dodge_settles_fact else "no fact settled"
+        settles = "settles a fact" if mind.dodge_settles_fact else "no fact settled"
         print(f"  [dodged] {dodged} ({settles})")
+        print(f"    asked: {mind.what_was_asked}")
+        print(f"    got:   {mind.was_it_given}")
 
     turn_delta, state = process_turn_scoring(
         results,
         state,
         player_answer,
         dodged_subject=dodged,
-        dodge_settles_fact=extracted.dodge_settles_fact,
+        dodge_settles_fact=mind.dodge_settles_fact,
         answered_subjects=answered_subjects,
     )
 

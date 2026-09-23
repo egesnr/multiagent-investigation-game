@@ -157,6 +157,18 @@ class EvidenceAssessment(BaseModel):
     claim: str = Field(...)
     claim_proposition: str = Field(...)
     evidence_proposition: str = Field(...)
+    could_both_hold: str = Field(
+        description="Before choosing a relation: describe any situation in "
+        "which BOTH propositions are true at once, or write 'none' if there "
+        "genuinely is not one. CONTRADICTS is available only when the honest "
+        "answer is 'none'. Different numbers about different things are the "
+        "trap this field exists to catch — what something cost and what was "
+        "charged for it can both be true and differ, which is what an error "
+        "IS. Measured without this field: a claim that a meal cost one amount "
+        "was marked as contradicted by the settled card amount, and scored as "
+        "a proven lie, when nothing available established the meal's price "
+        "either way."
+    )
     relation: EvidenceRelation = Field(...)
 
     fact_id: Optional[str] = None
@@ -252,18 +264,6 @@ class ClaimRecord(BaseModel):
     _keep_text_sane = _truncating_validator("text", "rationale", "subject", "suggested_thread")
 
 
-class AnswerEngagement(str, Enum):
-    """Whether the answer addressed the question that was actually asked.
-
-    Not a judgment of honesty — a liar who gives a full account is ANSWERED.
-    This is only about whether the investigator got a response to their
-    question or was left holding it.
-    """
-
-    ANSWERED = "answered"
-    DODGED = "dodged"
-
-
 class ClaimNoveltyStatus(str, Enum):
     NEW = "new"
     REITERATED = "reiterated"
@@ -313,34 +313,16 @@ class ExtractedClaims(BaseModel):
     # deciding whether the question was answered, while the question is still
     # the thing in mind, is more reliable than extracting content first and
     # then reverse-engineering whether it was responsive.
-    engagement: AnswerEngagement = Field(
-        default=AnswerEngagement.ANSWERED,
-        description="DODGED if the answer did not address what was asked — a "
-        "refusal, an insult, a change of subject, a non-answer, or content "
-        "about something else entirely. ANSWERED if the suspect gave an "
-        "account of the thing asked about, however implausible, however "
-        "partial, and however hostile the tone. Being wrong is answering. "
-        "Being rude while answering is answering. Saying they cannot recall "
-        "is answering IF the question was about their memory or knowledge; it "
-        "is dodging if the question asked them to produce or account for "
-        "something concrete.",
-    )
-    dodged_subject: Optional[str] = Field(
-        default=None,
-        description="When DODGED: the subject the investigator asked about, "
-        "as a short noun phrase, in the same form a claim's subject takes. "
-        "Reuse a subject already on record when it is the same topic. Null "
-        "when ANSWERED.",
-    )
-    dodge_settles_fact: bool = Field(
-        default=False,
-        description="When DODGED: true only if the question asked the suspect "
-        "to PRODUCE or ACCOUNT FOR something that either exists or does not — "
-        "a receipt, a document, a name, a date, a witness. Refusing to produce "
-        "it is evidence it does not exist. False when the question asked them "
-        "to admit wrongdoing, explain their intentions, or say what they knew "
-        "or meant: silence can never establish a state of mind, and a refusal "
-        "to confess is NEVER an admission. If in doubt, false.",
+    propositions: list[str] = Field(
+        default_factory=list,
+        description="Every distinct thing this answer asserts, one per entry, "
+        "before you build any claims. A run-on answer often carries several, "
+        "and they can sit badly against each other — list them all anyway, "
+        "including the ones that damage the suspect and the ones that help "
+        "them. Measured without this field: an answer containing an excuse AND "
+        "an admission of awareness yielded only the excuse, and the admission "
+        "never reached the record at all. Build the claims below from this "
+        "list, not from the sentence.",
     )
     claims: list[ExtractedClaimItem] = Field(default_factory=list)
     new_defenses: list[str] = Field(default_factory=list)
@@ -568,7 +550,54 @@ class InvestigatorMind(BaseModel):
     what to ask.
     """
 
-    # --- 1. read the whole picture ---
+    # --- 1. did they answer the question? ---
+    # First, because everything after it depends on whether this turn produced
+    # an account or an evasion, and because judging it needs the whole
+    # interview rather than one answer in isolation.
+    what_was_asked: str = Field(
+        default="",
+        description="In one line, what your last question actually demanded — "
+        "what would have to be in a reply for it to count as answered. Not a "
+        "restatement of the question's wording.",
+    )
+    what_they_offered: str = Field(
+        default="",
+        description="State what the answer actually puts forward, in its own "
+        "terms, before you judge it. Write it as they meant it, not as you "
+        "would rebut it. Declared before the verdict because the two are easy "
+        "to collapse: an account you find false is still an account.",
+    )
+    was_it_given: str = Field(
+        default="",
+        description="Does what they offered address what you asked? Yes or no, "
+        "and why. This is a question about RESPONSIVENESS ONLY. A lie is an "
+        "answer. A hostile, vague or partial reply that engages with the "
+        "question is an answer. Disbelieving it, or being able to disprove it, "
+        "does not make it a non-answer — that is what the rest of the pipeline "
+        "is for. Only a reply that changes the subject, complains about the "
+        "question, or tells you to look it up yourself is a non-answer.",
+    )
+    subject_dodged: Optional[str] = Field(
+        default=None,
+        description="When it was not given: the subject of what you asked, as "
+        "a short noun phrase, at the granularity of the question — not the "
+        "case's overall topic. A question about a receipt and a question about "
+        "a calendar are two subjects even when both concern one transaction. "
+        "Reuse a subject already on record only when it is the same question "
+        "being put again. Null when the question was answered.",
+    )
+    dodge_settles_fact: bool = Field(
+        default=False,
+        description="When it was not given: true only if you asked them to "
+        "PRODUCE or ACCOUNT FOR something that either exists or does not — a "
+        "receipt, a name, a date, a document, a witness. Refusing to produce "
+        "it is evidence it does not exist. False when you asked them to admit "
+        "wrongdoing or say what they knew or intended: silence can never "
+        "establish a state of mind, and a refusal to confess is never a "
+        "confession. If unsure, false.",
+    )
+
+    # --- 2. read the whole picture ---
     account_summary: str = Field(
         description="3-5 sentences: the suspect's account of what happened, as "
         "they have told it so far across the whole interview, in their own "
@@ -598,33 +627,33 @@ class InvestigatorMind(BaseModel):
         "like to be true. Empty if nothing genuinely follows."
     )
 
-    # --- 2. findings that score ---
+    # --- 3. findings that score ---
     self_contradictions: list[SelfContradiction] = Field(
         default_factory=list,
         description="Only genuinely new tensions surfaced by THIS turn's answer "
-        "against something the suspect said earlier. Not against outside facts "
-        "— that is the Checker's job. Do not re-list a tension already "
+        "against something the suspect said earlier. Two of THEIR statements, "
+        "never their statement against a record — the Checker owns that "
+        "comparison and has already made it. Do not re-list a tension "
         "identified in a previous turn.",
     )
     unfalsifiable_account: Optional[SelfContradiction] = Field(
         default=None,
-        description="Set ONCE, ever, when the suspect's account has become one "
-        "where nothing in it can be checked by anyone: cannot recall, cannot "
-        "name, no documentation, the only witness unavailable. Not the same as "
-        "a claim merely being unverified — it is the shape of the WHOLE "
-        "account. Leave null while they are still offering checkable detail, "
-        "and null on every turn after it has been flagged once.",
+        description="Set ONCE, ever, when the account has become one where "
+        "nothing in it can be checked by anyone: cannot recall, cannot name, no "
+        "documentation, the only witness unavailable. Not the same as a claim "
+        "merely being unverified — it is the shape of the WHOLE account. Null "
+        "while they are still offering checkable detail, and null on every turn "
+        "after it has been flagged once.",
     )
     stale_thread: Optional[str] = Field(
         default=None,
         description="Set only if the last 3+ questions circled the same "
         "underlying point without the suspect adding anything new, however "
         "differently worded. Name the topic in a few words. Null if the thread "
-        "is still producing movement — staying on a point that keeps cracking "
-        "open is good interrogation, not a stale thread."
+        "is still producing movement.",
     )
 
-    # --- 3. the decision ---
+    # --- 4. the decision ---
     # The two war-room reads are NOT fields here. They arrive as input, from
     # two calls that could not see each other's answer. One model writing both
     # sides in sequence is not a debate — it already knows which side it wants,
