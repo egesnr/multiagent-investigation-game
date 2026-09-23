@@ -26,7 +26,12 @@ def _is_retryable(exc: Exception) -> bool:
     return not any(marker in exc_text for marker in _NON_RETRYABLE_MARKERS)
 
 
-def invoke_with_retry(chain, payload: dict, attempts: int = 5, base_delay: float = 8.0):
+# 2/4/8/16 rather than 8/16/32/64. Measured on a bad free-tier spell: three
+# calls in one turn hit the retry path, and the old schedule spent 56 seconds
+# waiting on each of them — 704 seconds for a turn whose actual work was under
+# 40. These errors clear in a second or two when they clear at all, so the long
+# tail of the old schedule bought nothing and cost most of the turn.
+def invoke_with_retry(chain, payload: dict, attempts: int = 5, base_delay: float = 2.0):
     last_exc = None
     for attempt in range(attempts):
         try:

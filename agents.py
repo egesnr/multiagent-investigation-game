@@ -45,10 +45,20 @@ load_dotenv()
 MODEL_NAME = os.environ.get("GAME_MODEL", "gemini-3.1-flash-lite")
 
 
-def get_llm(temperature: float = 0.3):
+# A hard ceiling on generation, not a style preference. An undescribed
+# free-text field once drew 393,000 characters of enumerated follow-ups out of
+# one call — 141 seconds, 63% of that turn, for two claims. Truncating the
+# result afterwards does not help: the time is spent producing it. Nothing
+# legitimate in this pipeline exceeds a few thousand characters, and the
+# largest real output measured (the Lead, with twelve fields) was 2,657.
+MAX_OUTPUT_TOKENS = 2048
+
+
+def get_llm(temperature: float = 0.3, max_output_tokens: int = MAX_OUTPUT_TOKENS):
     return ChatGoogleGenerativeAI(
         model=MODEL_NAME,
         temperature=temperature,
+        max_output_tokens=max_output_tokens,
     )
 
 
@@ -72,9 +82,9 @@ world-changing actions such as:
 
 An action is allowed only if the required object/person/result is already present
 in WORLD STATE below. A verbal claim like "I have a receipt at home" is speech,
-not a blocked action. A mixed answer like "the restaurant gave me a receipt; here
-it is" should keep the verbal claim in analysis_text while blocking only the
-physical handover if the receipt is not available.
+not a blocked action. A mixed answer that both claims something and tries to produce it should
+keep the verbal claim in analysis_text while blocking only the physical
+handover, when the object is not actually present.
 
 Return analysis_text containing all usable verbal/factual content with blocked
 action language removed. If the answer contains only a blocked action, return an
@@ -161,8 +171,8 @@ text, decide what it is about and put that in `subject`.
 
 A subject is the topic slot a claim occupies — an event, an amount, a person, a
 period of time, a state of mind, or the suspect's conduct during this interview.
-It is not the assertion. "Whether the suspect was at the restaurant" is a
-subject, and both "I was there" and "I was never there" belong to it.
+It is not the assertion: a subject and its denial share one subject, because
+they are two answers to the same question.
 
 You will be given the subjects already on record. If one of them covers this
 claim, reuse it word for word. Do not coin a near-duplicate subject because the
@@ -182,9 +192,9 @@ RULE 4 — ADMISSION VS. DEFENSE SEPARATION:
 For every claim, set is_defense:
 - is_defense=false: a plain, undisputed factual admission (what happened).
 - is_defense=true: an excuse, alternative explanation, unverified alibi, or any
-  claim offered to justify/explain away suspicion — even if it is concrete and
-  checkable (e.g. "the charge was a billing error" is a checkable claim AND a
-  defense; mark both is_defense=true and checkable=true).
+  claim offered to justify or explain away suspicion — even when it is concrete
+  and checkable. An explanation can be both: mark is_defense=true and
+  checkable=true together.
 This is a checkable-vs-not distinction, not a claims-vs-defenses bucket: checkable
 defenses still belong in claims so they can be verified.
 
@@ -813,10 +823,13 @@ skeptic_prompt = ChatPromptTemplate.from_messages([
 voice arguing to press harder, right now.
 
 You have the whole case in front of you: every fact, every policy rule, the
-whole transcript. Use them together, not one at a time. Put an amount against
-a spending cap, a date against an approved itinerary, a delay against a
-reporting deadline. The strongest pressure point is usually a conclusion that
-follows from two things nobody has yet put side by side.
+whole transcript. Use them together, not one at a time — the strongest pressure
+point is usually a conclusion that follows from two things nobody has yet put
+side by side, and it will not be labelled as such in the record.
+
+Say what else you considered and why the point you chose beats it. If the only
+thing you can think to press is something the record already establishes, you
+have not looked far enough.
 
 Read HOW the suspect is answering, not just what they say — someone perfectly
 calm while sitting on a strong contradiction is stalling; someone who suddenly
@@ -902,17 +915,22 @@ state a document, record or check as existing unless it is literally in
 known_facts or the case log. If you are reasoning about what a future check
 might show, say "if verified, this would" — never state it as already true.
 
+You may argue from how the world generally works — how the systems, businesses
+and processes in this case normally operate — and that is legitimate pressure
+rather than speculation, because it puts the burden back on the suspect instead
+of handing them a false statement to correct. The test is grammatical and it is
+absolute: "something of that kind normally does X" is a question you are putting
+to them; "it did X here" is a claim you have not checked, and you may not make it
+however obvious it sounds.
+
 You may also take the suspect's account at face value and work out what ELSE
 would have to be true if it were — what another person, business or system
-would have done or noticed. A business reconciles its takings at the end of
-the day. A card terminal displays the amount before the PIN is entered. An
-issuer's dispute window stays open for a fixed period. None of this is
-something you have checked, so none of it is ever a finding or an assertion:
-it is something to put to the suspect, and the gap between what their account
-implies and what they did about it is often the whole case. "A restaurant
-counting its till nightly would have been $2,880 over" is legitimate reasoning
-and belongs here. "The restaurant's records show no correction" is not, unless
-it is in the facts.
+would have done or noticed, and whether the suspect behaved like someone for
+whom it was true. You have checked none of it, so none of it is ever a finding
+or an assertion about this case: it is something to put to them. Reasoning
+about how such things normally work is legitimate and belongs here. Stating
+that a particular record exists or says something is not, unless it is in the
+facts.
 
 4 — THE SUSPECT AGAINST THEMSELVES
 Only the suspect's own words can contradict each other. Use the SUSPECT'S OWN
@@ -1103,30 +1121,17 @@ VARY YOUR RHYTHM — this is what separates a person from a form:
 - Look at your own last two lines in the dialogue below. Do not open the same
   way twice, and do not reuse a phrase you already used.
 
-THE ONE RULE THAT MATTERS MOST — GENERAL VS. SPECIFIC:
-You may reason out loud about how the world generally works: how card terminals,
-receipts, bank alerts, expense systems or restaurants normally operate. That is
-legitimate pressure and you should use it freely.
+SAY THE DECIDED THING. DO NOT BUILD A NEW ARGUMENT.
+The line you write is the move that was already decided, in this person's voice.
+You are not choosing what to go after and you are not adding a fresh argument to
+it — the reasoning happened upstream, where it could be checked and recorded.
+Anything you invent here is checked by nobody.
 
-What you may never do is turn that into a specific claim about THIS case. The
-test is grammatical, and it is absolute:
-
-  ALLOWED  "A terminal normally shows the total before you confirm."
-  BANNED   "The terminal showed you the total."
-  ALLOWED  "Restaurants hand over a receipt as a matter of course."
-  BANNED   "You were handed a receipt and had it in your hand."
-  ALLOWED  "Cards like this normally flag charges far smaller than this one."
-  BANNED   "Your card's fraud alerts trigger at five hundred dollars."
-
-If you were not told that something happened here — by the suspect's own words
-in the transcript, or by your known facts — then you may only say that it
-usually happens, never that it did happen. This applies to anything that merely
-sounds like common knowledge about how companies, banks, restaurants or card
-systems work: sounding obviously true is not the same as being established, and
-this case may not work the way you assume.
-
-Said the allowed way it is also stronger interrogation, because it puts the
-burden back on them instead of handing them a false statement to correct.
+You may never assert a specific claim about this case that you were not given.
+If neither the suspect's own words nor your known facts say something happened,
+you may not say it happened, however obviously true it sounds. A thing that
+merely sounds like common knowledge is not established, and this case may not
+work the way you assume.
 
 This is enforced by the grounding list you fill in before writing your line.
 For every specific claim about this case your line will make, you must name

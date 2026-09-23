@@ -185,7 +185,15 @@ class InvestigativeSignificance(BaseModel):
     strategic_value: str = Field(default="low", description="One of: low, medium, high")
     future_verification_value: FutureVerificationValue = FutureVerificationValue.NONE
     evidentiary_impact: EvidentiaryImpact = EvidentiaryImpact.NONE
-    suggested_thread: Optional[str] = None
+    suggested_thread: Optional[str] = Field(
+        default=None,
+        description="ONE line of inquiry this claim opens, in a single short "
+        "sentence — the one thing most worth pursuing, not a list of "
+        "everything that could be checked. Null when the claim opens nothing "
+        "new. Left undescribed, this field produced 393,000 characters of "
+        "enumerated follow-ups in one call, which was 63% of that turn's "
+        "running time.",
+    )
 
 
 class CheckResult(BaseModel):
@@ -352,9 +360,8 @@ class SelfContradiction(BaseModel):
         "topic before writing the sentence, so a tension already on record "
         "gets recognised instead of re-described in fresh words. If a "
         "contradiction about this subject has already been flagged, you are "
-        "restating it, not finding a new one. 'The suspect's basis for the "
-        "$320 figure' is a subject; every rewording of 'they claim to know "
-        "the amount but cannot support it' belongs to that one subject."
+        "restating it, not finding a new one: every rewording of one tension "
+        "belongs to the subject it is about."
     )
     claim_text: str = Field(
         description="A single, self-contained statement of the tension for "
@@ -370,10 +377,9 @@ class SelfContradiction(BaseModel):
         "once. Declared before the impact rating on purpose: write this "
         "sentence first, and if you cannot write it, there is no "
         "contradiction — leave the item out entirely rather than rating it. "
-        "Observed without this field: 'he says $320 is the right price, so the "
-        "restaurant charged ten times that, so nobody added a zero' was filed "
-        "as a strong contradiction, when charging ten times is precisely what "
-        "adding a zero does."
+        "Two statements that restate the same thing, or that both follow from "
+        "the same premise, are not in tension however differently they are "
+        "worded."
     )
     evidentiary_impact: EvidentiaryImpact = Field(
         description="How damaging THIS specific self-contradiction is to the "
@@ -514,7 +520,7 @@ class SpeakerLine(BaseModel):
     """What the investigator actually says, plus the sources behind it.
 
     `grounding` is declared FIRST on purpose, same trick as case_review on
-    StrategistMove: structured output is generated in schema order, so the
+    InvestigatorMind: structured output is generated in schema order, so the
     model must name a source for each specific claim BEFORE it writes the
     sentence containing it. Enumerating forbidden categories in the prompt
     kept failing — every time one category was closed (inventing documents,
@@ -543,66 +549,6 @@ class SpeakerLine(BaseModel):
     )
 
 
-class StrategistMove(BaseModel):
-    # case_review is declared FIRST on purpose: structured output is generated
-    # field by field in schema order, so this forces the model to actually
-    # reason in prose about the whole case BEFORE it commits to a target,
-    # instead of picking a target first and writing a justification for it
-    # afterward. See agents.strategist_prompt for what this must cover.
-    case_review: str = Field(
-        description="Think through the case so far in your own words before "
-        "deciding anything: what is the suspect's actual central claim or "
-        "defense, which currently-unresolved points already carry high "
-        "strategic_value in the case log regardless of how long ago they "
-        "were raised, and which of those is still genuinely untested. This "
-        "is not a summary for its own sake — your target below must follow "
-        "from what you conclude here. Every factual assertion you make here "
-        "must trace back to something actually present in known_facts or the "
-        "case log below — never state a document, record, signature, or "
-        "outside check as existing or confirmed unless it is literally there. "
-        "If something is unconfirmed, say it is unconfirmed."
-    )
-    repetition_check: str = Field(
-        description="Before naming a target: restate, in plain terms, what "
-        "EVERY move in move_history below was actually asking — all of "
-        "them, not just the most recent one or two — the underlying "
-        "question, not the exact wording. Then check whether the target "
-        "you are about to pick is asking any ONE of those same underlying "
-        "questions again in different clothes, even if it was several "
-        "turns ago. Judge this by meaning, not matching words: 'did you see "
-        "the alert' and 'how did $320 become $3,200' are the same question "
-        "if both are really just asking whether the suspect noticed and "
-        "ignored the discrepancy, even though they share almost no words — "
-        "and a question from turn 1 is exactly as repeated as one from last "
-        "turn if you're asking it again now. If your planned target "
-        "repeats ANY earlier move by meaning, say so here and pick a "
-        "genuinely different thread instead — a different fact, a "
-        "different policy angle, or the account as a whole — never proceed "
-        "with a same-meaning target just because the phrasing changed or "
-        "because it's been a few turns. If it is genuinely new, say "
-        "briefly what makes it different from every prior move, not just "
-        "the most recent one."
-    )
-    target: str = Field(
-        description="Free-form investigation thread to pursue next. Same "
-        "grounding rule as case_review applies here: any specific detail "
-        "you reference — a number, a document, what the suspect supposedly "
-        "saw, received, or was shown — must be something the suspect "
-        "actually said or a fact from known_facts/case log. Do not invent "
-        "a specific because it seems like a likely inference (e.g. do not "
-        "assert the suspect saw an alert showing a particular dollar "
-        "amount just because you know that amount — only state that if the "
-        "suspect actually said so)."
-    )
-    rationale: str = Field(
-        description="Internal strategy rationale. Must name which War Room "
-        "voice's read (Skeptic's push_now vs. Alternative's caution_move) "
-        "most shaped this move, and why the other one was outweighed this "
-        "turn — not a restatement of both, an actual adjudication."
-    )
-    expected_value: str = Field(default="medium", description="low, medium, or high")
-
-
 class InvestigatorMind(BaseModel):
     """One read of the whole case, replacing four separate calls (narrative
     synthesis, skeptic, alternative hypothesis, strategist).
@@ -612,9 +558,8 @@ class InvestigatorMind(BaseModel):
     transcript but was never shown a single fact or policy rule, the skeptic
     had facts but no policy, and the strategist — the one actually choosing
     the next question — had neither. So no agent in the room could notice
-    that a $1,150 bottle is absurd for one diner, or that a claimed $320
-    dinner still breaches a $75 cap: those inferences need the bill, the
-    policy and the answer in one head, and no head had all three.
+    a conclusion that needed an authored fact, a policy rule and the suspect's
+    answer at the same time, because no agent held all three.
 
     Field order is the reasoning order. unused_facts and inferences come
     before every judgment for the same reason case_review precedes target:
@@ -642,12 +587,15 @@ class InvestigatorMind(BaseModel):
         default_factory=list,
         description="What follows from combining the facts, the policy rules "
         "and what the suspect has actually said — conclusions nobody has "
-        "stated yet. Do arithmetic where it bites (an amount against a cap, a "
-        "date against an itinerary, a timing against a deadline), and ask what "
-        "would have to be true if their account were true. Each entry must be "
-        "derivable from known_facts, the policy, or the suspect's own words — "
-        "never from something you assume or would like to be true. Empty if "
-        "nothing genuinely follows."
+        "stated yet. Cover both halves: what follows about the SUSPECT, and "
+        "what follows about ANYONE OR ANYTHING ELSE involved — what another "
+        "person, business or system would have done or noticed if their "
+        "account were true, and whether the suspect behaved like someone for "
+        "whom it was true. The second half is the one that gets forgotten, and "
+        "it is usually where an account comes apart. Do the arithmetic where "
+        "it bites. Each entry must be derivable from known_facts, the policy, "
+        "or the suspect's own words — never from something you assume or would "
+        "like to be true. Empty if nothing genuinely follows."
     )
 
     # --- 2. findings that score ---
