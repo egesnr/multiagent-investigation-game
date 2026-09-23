@@ -7,12 +7,14 @@ import json
 from models import (
     CaseFile,
     CheckResult,
+    AnswerEngagement,
     ClaimNoveltyStatus,
     ClaimStatus,
     ClaimType,
     FindingBasis,
     GameState,
     RiskProfile,
+    SuspectNarrative,
 )
 from game_logic import (
     case_decisively_resolved,
@@ -22,10 +24,9 @@ from game_logic import (
 from agents import (
     run_checker,
     run_extractor,
-    run_narrative_synthesis,
+    run_investigator_mind,
     run_reality_gate,
     run_speaker,
-    run_strategist,
 )
 from resolution import format_resolution, run_resolution
 
@@ -179,26 +180,19 @@ def run_turn(
     # guessing from the single most recent question alone. This mirrors the
     # context window already given to run_reality_gate.
     known_claims = [c.text for c in state.case_log.claims]
+    # The subject index the Extractor diffs against. Kept as a de-duplicated,
+    # order-preserving list so the model sees each topic slot once and can
+    # reuse its exact wording instead of coining a near-synonym.
+    known_subjects = list(dict.fromkeys(
+        c.subject for c in state.case_log.claims if c.subject
+    ))
     extracted = run_extractor(
         question,
         analysis_answer,
         known_claims=known_claims,
+        known_subjects=known_subjects,
         transcript=state.transcript,
     )
-
-    # Hold the suspect's account as one story, separate from the atomic
-    # claims list below. This is what catches a suspect contradicting their
-    # OWN earlier words (walked-back denials, a detail that quietly changed)
-    # and what notices the investigator itself circling the same topic
-    # without progress — neither of which the per-claim Checker pipeline can
-    # see, since it only ever compares one claim at a time against facts.
-    narrative = run_narrative_synthesis(state)
-    state.narrative = narrative
-
-    if narrative.stale_thread:
-        stale_note = narrative.stale_thread.strip()
-        if stale_note and stale_note not in state.case_log.exhausted_targets:
-            state.case_log.exhausted_targets.append(stale_note)
 
     # Safety net: exact-text duplicates must never reach the Checker regardless
     # of what novelty status the model assigned. This does not replace Rule 3
@@ -249,6 +243,9 @@ def run_turn(
     # alone. Thread it through so claim_type can be forced from it in code.
     defense_map = {item.text: item.is_defense for item in checkable_items}
 
+    # The Extractor owns the subject; the Checker is never asked to re-derive it.
+    subject_map = {item.text: item.subject for item in checkable_items}
+
     results = run_checker(
         state.case,
         checkable_claims,
@@ -256,7 +253,36 @@ def run_turn(
         case_log=state.case_log,
         ambiguous_map=ambiguous_map,
         defense_map=defense_map,
+        subject_map=subject_map,
     )
+
+    # One call now does what four used to: holds the account as one story,
+    # argues both sides, and picks the next move. It runs HERE, after the
+    # Checker, rather than before it as narrative synthesis used to — so the
+    # same head that decides what to ask next can see what this turn's answer
+    # just produced. See agents.run_investigator_mind for why the split was
+    # the problem rather than the structure.
+    mind, war_room = run_investigator_mind(
+        state, findings_this_turn=results, return_debug=True
+    )
+    narrative = SuspectNarrative(
+        summary=mind.account_summary,
+        self_contradictions=mind.self_contradictions,
+        unfalsifiable_account=mind.unfalsifiable_account,
+        stale_thread=mind.stale_thread,
+    )
+    state.narrative = narrative
+
+    if narrative.stale_thread:
+        stale_note = narrative.stale_thread.strip()
+        if stale_note and stale_note not in state.case_log.exhausted_targets:
+            state.case_log.exhausted_targets.append(stale_note)
+
+    if mind.unused_facts:
+        print(f"  [unused facts] {', '.join(mind.unused_facts)}")
+    for item in mind.inferences:
+        print(f"  [inference] {item}")
+    print(f"  [war room] innocent_reading_won={mind.innocent_reading_won}")
 
     # Self-contradictions are a different kind of finding from everything the
     # Checker produces: the narrative synthesis already did the verification
@@ -268,6 +294,10 @@ def run_turn(
     # rather than re-guessed.
     for contradiction in narrative.self_contradictions:
         results.append(CheckResult(
+            # Without this the finding is keyed on its own prose, and the same
+            # tension re-described next turn scores all over again — measured
+            # at seven scorings of one contradiction, 84 of a 132-point run.
+            subject=contradiction.subject,
             quoted_evidence=contradiction.claim_text,
             rationale=(
                 f"Earlier: \"{contradiction.earlier_statement}\" — "
@@ -293,6 +323,7 @@ def run_turn(
         state.unfalsifiable_flagged = True
         pattern = narrative.unfalsifiable_account
         results.append(CheckResult(
+            subject=pattern.subject,
             quoted_evidence=pattern.claim_text,
             rationale=(
                 f"Nothing in the account can be checked. e.g. \"{pattern.earlier_statement}\" "
@@ -309,7 +340,30 @@ def run_turn(
 
     results = dedupe_results(results)
 
-    turn_delta, state = process_turn_scoring(results, state, player_answer)
+    # Subjects the suspect had refused and has now spoken to: the fact taken
+    # against them is released, the stall charge is not.
+    answered_subjects = [
+        item.subject for item in extracted.claims
+        if item.subject and item.subject.strip() in state.dodge_fact_points
+    ]
+
+    dodged = (
+        extracted.dodged_subject
+        if extracted.engagement == AnswerEngagement.DODGED
+        else None
+    )
+    if dodged:
+        settles = "settles a fact" if extracted.dodge_settles_fact else "no fact settled"
+        print(f"  [dodged] {dodged} ({settles})")
+
+    turn_delta, state = process_turn_scoring(
+        results,
+        state,
+        player_answer,
+        dodged_subject=dodged,
+        dodge_settles_fact=extracted.dodge_settles_fact,
+        answered_subjects=answered_subjects,
+    )
 
     for result in results:
         rp = result.risk_profile
@@ -343,8 +397,7 @@ def run_turn(
         state.transcript.append({"role": "investigator", "text": closing})
         return state, closing
 
-    # Strategy uses the case log plus score/budget as urgency context.
-    move, war_room = run_strategist(state, return_debug=True)
+    move = mind
 
     _append_debug_log(
         f"TURN {state.question_count}\n"
@@ -379,8 +432,8 @@ def run_turn(
         + json.dumps(war_room.skeptic.model_dump(), indent=2, ensure_ascii=False)
         + "\n\nGOOD COP / ALTERNATIVE HYPOTHESIS:\n"
         + json.dumps(war_room.alternative.model_dump(), indent=2, ensure_ascii=False)
-        + "\n\nLEAD STRATEGIST:\n"
-        + json.dumps(move.model_dump(), indent=2, ensure_ascii=False)
+        + "\n\nLEAD INVESTIGATOR:\n"
+        + json.dumps(mind.model_dump(), indent=2, ensure_ascii=False)
         + "\n\nSTATE AFTER TURN:\n"
         + f"score={state.score}\n"
         + f"questions={state.question_count}/{state.max_questions}\n"

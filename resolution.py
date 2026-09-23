@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from llm_utils import invoke_with_retry
 from models import (
+    FindingBasis,
     ClaimStatus,
     EvidentiaryImpact,
     FinalOutcome,
@@ -193,7 +194,15 @@ def _verification_delta(verifications: list[VerificationResult]) -> int:
         if key in seen:
             continue
         seen.add(key)
-        if result.status in (VerificationStatus.DISPROVED, VerificationStatus.CONFIRMED):
+        # Only DISPROVING something the suspect committed to counts toward
+        # arrest. Confirming the act from the records establishes that it
+        # happened — which now sets the POLICY_VIOLATION floor in
+        # run_resolution — but it says nothing about whether they meant it,
+        # and intent is the only thing the arrest threshold is measuring.
+        # This scored for a while, and the effect was that a suspect who said
+        # nothing at all collected +55 from paper alone and finished one point
+        # under the threshold on evidence he had never been asked about.
+        if result.status == VerificationStatus.DISPROVED:
             total += IMPACT_POINTS[result.evidentiary_impact]
     return total
 
@@ -290,12 +299,32 @@ def run_resolution(state: GameState) -> ResolutionReport:
     # This is decided BEFORE the narrative is written, not after, so the
     # aftermath text is never generated against an outcome the code is about
     # to override.
+    # Three endings, and the middle one is the only win a guilty suspect can
+    # actually reach. The evidence in the file proves the ACT — over the cap,
+    # no receipt, never reported — whatever the suspect says, so "walked away
+    # clean" is not available to them. If the only outcomes are CAUGHT and
+    # NOT_PROVEN, every path ends in CAUGHT and there is nothing to play for.
+    #
+    # Intent is what the interview is actually contesting, and only the room
+    # can establish it. So: the score decides arrest, an established breach
+    # decides the floor beneath it.
+    # ClaimRecord keeps `basis`, not the full risk profile, so a policy finding
+    # is identified by where it came from rather than by a flag on it.
+    breach_established = any(
+        c.basis == FindingBasis.POLICY
+        or c.status in (ClaimStatus.CONTRADICTED, ClaimStatus.ADMITTED)
+        for c in state.case_log.claims
+        if c.investigator_visible
+    ) or any(
+        v.status == VerificationStatus.CONFIRMED for v in verifications
+    )
+
     if final_score >= state.case.arrest_threshold:
         outcome = FinalOutcome.CAUGHT
-    elif verification_draft.outcome_recommendation == FinalOutcome.CAUGHT:
-        outcome = FinalOutcome.NOT_PROVEN
+    elif breach_established:
+        outcome = FinalOutcome.POLICY_VIOLATION_ONLY
     else:
-        outcome = verification_draft.outcome_recommendation
+        outcome = FinalOutcome.NOT_PROVEN
 
     narrative_chain = narrative_prompt | get_llm(0.3).with_structured_output(NarrativeDraft)
     narrative = invoke_with_retry(narrative_chain, {

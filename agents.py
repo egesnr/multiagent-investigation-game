@@ -27,6 +27,7 @@ from models import (
     ExtractedClaimItem,
     ExtractedClaims,
     InvestigativeSignificance,
+    InvestigatorMind,
     ClaimStatus,
     ClaimType,
     EvidentiaryImpact,
@@ -35,9 +36,7 @@ from models import (
     GameState,
     RealityGateResult,
     SpeakerLine,
-    StrategistMove,
     EvidenceRelation,
-    SuspectNarrative,
     format_facts,
 )
 
@@ -131,24 +130,53 @@ Extract exact meanings only.
   literal checkable fact. If a statement is rhetorical/emotional posturing rather
   than a factual assertion, set checkable=false or omit it as a claim entirely.
 
-RULE 3 — STATE DIFFING:
-You will be given known_claims already on record. For every extracted claim,
-compare it against known_claims and set status:
-- NEW: not previously stated, in substance.
-- REITERATED: restates a known_claim with the same meaning, even if reworded.
-- UPDATED: revises or replaces a known_claim with a materially different version
-  (e.g. suspect changes their account of what happened).
-Judge by meaning, not exact wording.
+RULE 2b — DID THEY ANSWER THE QUESTION?
+Before anything else, decide whether this answer addressed the question that
+was actually asked, and record it in engagement.
 
-Denials are where this matters most, and where it is most often got wrong.
-"I didn't do anything wrong", "I dispute the premise", "that's not accurate",
-"I reject that characterisation", "nothing you've described happened" are all
-THE SAME ASSERTION — that no wrongdoing occurred — dressed in different words.
-Once that denial is on record, every later restatement of it is REITERATED, no
-matter how the sentence is built. Only mark a denial NEW when it denies
-something genuinely different (denying a meeting took place is not the same
-assertion as denying the amount is wrong). A suspect must not accrue fresh
-findings simply for saying "no" in eight different ways.
+ANSWERED covers more than it looks like. A lie is an answer. A hostile answer
+is an answer. A partial, vague or obviously false account is an answer. "I
+can't remember" is an answer when the question was about their memory.
+
+DODGED is when the investigator asked something and was left holding it: a
+refusal, an insult instead of a reply, a change of subject, a complaint about
+the question, or an account of something else. Name what they were asked about
+in dodged_subject, reusing a subject already on record when it is the same
+topic.
+
+Then dodge_settles_fact, and be careful here, because the two cases are
+different in kind:
+- The question asked them to PRODUCE or ACCOUNT FOR something that either
+  exists or does not — a receipt, a name, a date, a document, a witness.
+  Refusing to produce it is evidence it does not exist. TRUE.
+- The question asked them to admit wrongdoing, or say what they intended,
+  knew, or meant. Silence establishes NOTHING here. A refusal to confess is
+  never a confession, and "I don't know" to "did you do it" is not a yes.
+  FALSE.
+If you are unsure which it is, it is FALSE.
+
+RULE 3 — SUBJECT FIRST, THEN STATE DIFFING:
+The record is organised by SUBJECT, not by sentence. Before writing a claim's
+text, decide what it is about and put that in `subject`.
+
+A subject is the topic slot a claim occupies — an event, an amount, a person, a
+period of time, a state of mind, or the suspect's conduct during this interview.
+It is not the assertion. "Whether the suspect was at the restaurant" is a
+subject, and both "I was there" and "I was never there" belong to it.
+
+You will be given the subjects already on record. If one of them covers this
+claim, reuse it word for word. Do not coin a near-duplicate subject because the
+suspect used different words this time: the wording of an answer does not
+determine its subject, the topic does.
+
+Then set status against what is already filed under that subject:
+- NEW: nothing on record occupies this subject yet.
+- REITERATED: the subject is on record and this asserts the same thing again —
+  however differently phrased, and however much new heat, detail or insult is
+  wrapped around it. Something the suspect keeps doing or keeps saying is one
+  continuing fact about this interview, not a fresh fact on each recurrence.
+- UPDATED: the subject is on record but this asserts something materially
+  different from what was filed — the suspect has changed their account.
 
 RULE 4 — ADMISSION VS. DEFENSE SEPARATION:
 For every claim, set is_defense:
@@ -220,6 +248,7 @@ RULE 6 — SUSPECT-ONLY GROUNDING:
         "Recent interview context:\n{transcript}\n\n"
         "Previous question:\n{question}\n\n"
         "Suspect answer:\n{answer}\n\n"
+        "Subjects already on record (reuse exactly when one applies):\n{known_subjects}\n\n"
         "Known claims already on record:\n{known_claims}"
     ),
 ])
@@ -229,6 +258,7 @@ def run_extractor(
     question: str,
     answer: str,
     known_claims: list[str] | None = None,
+    known_subjects: list[str] | None = None,
     transcript: list[dict] | None = None,
 ) -> ExtractedClaims:
     chain = extractor_prompt | get_llm(0).with_structured_output(ExtractedClaims)
@@ -236,140 +266,8 @@ def run_extractor(
         "question": question,
         "answer": answer,
         "known_claims": known_claims or ["- None yet"],
+        "known_subjects": known_subjects or ["- None yet"],
         "transcript": (transcript or [])[-8:],
-    })
-
-
-narrative_prompt = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        """You hold the suspect's account together as ONE story across the
-whole interview. This is different from checking individual claims: you are
-not asked whether anything is true, only whether the suspect's own words
-still add up against their OWN earlier words.
-
-TASK 1 — SUMMARY:
-Update the running summary of what the suspect has told you so far, in their
-own logic, folding in anything new from the latest turn.
-
-TASK 2 — SELF-CONTRADICTIONS:
-Compare the suspect's LATEST answer against everything they said in EARLIER
-turns (not against outside facts — that is the Checker's job, not yours).
-
-ONLY THE SUSPECT'S OWN WORDS COUNT. Use the SUSPECT'S OWN WORDS list below,
-not the full transcript, to decide what they said. The investigator's
-questions often characterise or paraphrase the suspect's position, sometimes
-wrongly — if the investigator says "you told me you couldn't name the venue"
-and the suspect never said that, then the suspect denying it is NOT a
-contradiction, it is a correction of the investigator. Never treat the
-investigator's words as something the suspect said, and never flag a suspect
-for correcting a mischaracterisation.
-
-Flag it only when two of the suspect's own statements are in real tension:
-a walked-back denial, a detail that quietly changed, a claim that only made
-sense given something they have since taken back. Do not flag:
-- a claim merely being unverified or unprovable,
-- a claim that was already flagged as a self-contradiction in a previous
-  turn (check PREVIOUSLY IDENTIFIED CONTRADICTIONS below),
-- ordinary elaboration or added detail that does not conflict with anything
-  said before,
-- the suspect being unable to recall, name, document or produce something.
-  Not remembering is not contradicting yourself. That whole pattern belongs
-  in unfalsifiable_account and NOWHERE ELSE — never also report it here, in
-  any wording. "Cannot recall the details", "account is uncheckable", "every
-  detail is unavailable" are one observation with one home, not three
-  contradictions.
-If the latest answer raises no new tension against the suspect's own prior
-words, return an empty list. Do not manufacture one to have something to say.
-For each one you do flag, rate evidentiary_impact using the rubric on that
-field — most self-contradictions are weak or moderate; reserve strong/
-decisive for a reversal that guts something central to the suspect's own
-stated defense.
-
-TASK 2b — AN ACCOUNT NOTHING CAN CHECK:
-Separately from contradictions, watch the SHAPE of the whole account. A
-suspect can avoid ever contradicting themselves by making sure no part of
-their story can be verified: they cannot recall, cannot name, kept no
-document, the one person who could confirm it is unreachable. Individually
-each is ordinary. Together, past a certain point, they are a pattern — and an
-account engineered to be uncheckable is itself evidence, because a person
-describing events that really happened can almost always offer something
-someone else could confirm.
-Flag this ONCE, in unfalsifiable_account, when that point is reached. Do not
-flag it early while they are still giving checkable detail, and do not flag it
-again on later turns once you have flagged it. Be conservative: a suspect who
-simply refuses to answer is stonewalling, which is handled elsewhere — this is
-for one who answers freely and says nothing checkable.
-
-TASK 3 — STALE THREAD:
-Look at the last 3+ turns on the same underlying point. The test is NOT
-"is it the same topic" — staying on one topic while it keeps cracking open is
-exactly what a good interrogation does and must NOT be flagged. The test is
-whether the suspect's answer this turn repeated, dodged, or minimally
-reworded their PREVIOUS answer on that same point WITHOUT adding a new
-admission, a new detail, or a new self-contradiction. Only flag stale_thread
-when the last 3+ turns on that point produced nothing new each time — a flat
-non-answer, "I already told you," or the same claim restated. If the suspect's
-account of that same point moved AT ALL turn to turn (even a small new
-detail, even a walk-back), that thread is working, not stale — leave
-stale_thread null even after many turns on it.
-
-PREVIOUSLY IDENTIFIED CONTRADICTIONS (do not repeat these):
-{prior_contradictions}
-
-HAS THE UNFALSIFIABLE-ACCOUNT PATTERN ALREADY BEEN FLAGGED?
-{already_flagged_unfalsifiable}
-
-THE SUSPECT'S OWN WORDS — the only statements that can contradict each other:
-{suspect_words}
-
-FULL TRANSCRIPT SO FAR (for context only; the investigator's lines here are
-NOT things the suspect said):
-{transcript}"""
-    ),
-    (
-        "human",
-        "Previous running summary (empty if this is turn 1):\n{prior_summary}\n\n"
-        "Latest suspect answer just given:\n{latest_answer}"
-    ),
-])
-
-
-def run_narrative_synthesis(state: GameState) -> SuspectNarrative:
-    prior = state.narrative
-    chain = narrative_prompt | get_llm(0).with_structured_output(SuspectNarrative)
-    return invoke_with_retry(chain, {
-        # Pull from case_log.contradictions (accumulated across the WHOLE
-        # game) rather than prior.self_contradictions (only what THIS ONE
-        # prior turn's narrative object found). state.narrative gets fully
-        # replaced every turn, so the latter has a one-turn memory: a
-        # contradiction found in turn 3 was invisible by turn 5 once turn 4
-        # found nothing new, letting a reworded version of the same tension
-        # get "discovered" and scored again as if new.
-        "prior_contradictions": (
-            "\n".join(f"- {c}" for c in state.case_log.contradictions)
-            if state.case_log.contradictions else "- None yet"
-        ),
-        "already_flagged_unfalsifiable": (
-            "YES — you have already flagged this pattern. Leave "
-            "unfalsifiable_account null this turn and every turn from now on."
-            if state.unfalsifiable_flagged else
-            "No — not yet flagged."
-        ),
-        "transcript": state.transcript,
-        # The full transcript above contains the investigator's questions too,
-        # and a self-contradiction check handed both speakers will sometimes
-        # attribute the investigator's own words to the suspect. Seen live: the
-        # investigator misread "I don't know the dish names" as "I can't name
-        # the venue", said so out loud, and when the player corrected it the
-        # correction was scored as the player contradicting themselves. Only
-        # the lines below can contradict each other.
-        "suspect_words": "\n".join(
-            f"- turn {i + 1}: {t['text']}"
-            for i, t in enumerate(t for t in state.transcript if t["role"] == "suspect")
-        ) or "- Nothing said yet",
-        "prior_summary": prior.summary if prior else "",
-        "latest_answer": state.transcript[-1]["text"] if state.transcript else "",
     })
 
 
@@ -619,12 +517,14 @@ def _merge_checker_results(
     significance_results: list[InvestigativeSignificance],
     ambiguous_map: dict[str, bool] | None = None,
     defense_map: dict[str, bool] | None = None,
+    subject_map: dict[str, str] | None = None,
 ) -> list[CheckResult]:
     """Merge both checker stages while enforcing non-negotiable evidence invariants."""
     significance_by_claim = {r.claim.strip(): r for r in significance_results}
     merged: list[CheckResult] = []
     ambiguous_map = ambiguous_map or {}
     defense_map = defense_map or {}
+    subject_map = subject_map or {}
 
     for index, evidence in enumerate(evidence_results):
         significance = (
@@ -693,6 +593,7 @@ def _merge_checker_results(
             evidentiary_impact=impact,
             suggested_thread=significance.suggested_thread,
             ambiguous=ambiguous_map.get(evidence.claim.strip(), False),
+            subject=subject_map.get(evidence.claim.strip(), ""),
         ))
 
     return merged
@@ -705,6 +606,7 @@ def run_checker(
     case_log=None,
     ambiguous_map: dict[str, bool] | None = None,
     defense_map: dict[str, bool] | None = None,
+    subject_map: dict[str, str] | None = None,
 ) -> list[CheckResult]:
     if not claims:
         return []
@@ -773,33 +675,45 @@ def run_checker(
         significance_output.results,
         ambiguous_map=ambiguous_map,
         defense_map=defense_map,
+        subject_map=subject_map,
     )
 
 
 class SkepticView(BaseModel):
-    strongest_pressure_point: str
-    behavioral_read: str = Field(
-        description="What the suspect's own words this turn actually suggest "
-        "about how they're holding up — calculated evasion, rehearsed "
-        "composure, genuine panic, someone starting to crack. Read it from "
-        "how they actually phrased their answer in the transcript."
+    strongest_pressure_point: str = Field(
+        description="The single hardest place to press right now: an "
+        "established contradiction, a policy admission, an unsupported "
+        "explanation, or a conclusion that follows from the facts and the "
+        "policy which the suspect has to answer for."
     )
-    diversion_risk: str
+    behavioral_read: str = Field(
+        description="What the suspect's own words this turn suggest about how "
+        "they are holding up — calculated evasion, rehearsed composure, "
+        "genuine panic, someone starting to crack. Read it from how they "
+        "actually phrased the answer."
+    )
     push_now: str = Field(
-        description="The single most aggressive in-room move to make next "
-        "turn — a question or confrontation, not an outside check. Never "
-        "target a topic listed in exhausted_targets, even by rephrasing it — "
-        "that thread is dead; find fresh ground."
+        description="The single most aggressive in-room move next turn — a "
+        "question or confrontation, never an outside check. Never target a "
+        "topic in exhausted_targets, even reworded."
     )
 
 
 class AlternativeView(BaseModel):
-    strongest_innocent_reading: str
-    fairness_risk: str
+    strongest_innocent_reading: str = Field(
+        description="The strongest plausible non-fraud explanation that still "
+        "fits everything actually known. Argue it properly — this is what "
+        "stops the room steamrolling someone who may be telling the truth."
+    )
+    fairness_risk: str = Field(
+        description="What would be unfair or overreaching about pressing "
+        "hardest right now, and what an innocent person in this exact spot "
+        "would not yet have been able to show."
+    )
     caution_move: str = Field(
         description="The single in-room move that fairly tests the innocent "
         "reading without assuming guilt — a question, not an outside check. "
-        "Never target a topic listed in exhausted_targets."
+        "Never target a topic in exhausted_targets."
     )
 
 
@@ -812,307 +726,344 @@ def _known_facts(state: GameState) -> str:
     return format_facts(state.case.visible_facts("investigator_start"))
 
 
+# Every voice in the room now gets this same block. The old split gave each
+# agent a different slice — the narrative agent had the whole transcript and
+# no facts, the Skeptic had facts and no policy, the Strategist had neither —
+# so no one could draw a conclusion that needed two of them at once. Splitting
+# the WORK is the design; splitting the INFORMATION was the bug.
+def _full_context(state: GameState, findings_this_turn=None) -> dict:
+    return {
+        "known_facts": _known_facts(state),
+        "policy": "\n".join(f"- {p}" for p in state.case.policy_rules) or "- None",
+        "room_objects": state.case.room_objects or ["- Nothing but the case file"],
+        "case_log": state.case_log.investigator_view(),
+        "findings_this_turn": [
+            {
+                "claim": r.quoted_evidence,
+                "status": r.verification_status.value,
+                "impact": r.evidentiary_impact.value,
+                "why": r.rationale,
+            }
+            for r in (findings_this_turn or [])
+        ] or "- Nothing established from this answer",
+        "suspect_words": "\n".join(
+            f"- turn {i + 1}: {t['text']}"
+            for i, t in enumerate(t for t in state.transcript if t["role"] == "suspect")
+        ) or "- Nothing said yet",
+        "transcript": state.transcript,
+        "prior_summary": state.narrative.summary if state.narrative else "",
+        "exhausted_targets": state.case_log.exhausted_targets or ["- None"],
+        "banked_subjects": state.banked_subjects or ["- None yet"],
+        "move_history": state.move_history[-6:],
+        "remaining": max(state.max_questions - state.question_count, 0),
+        "score": state.score,
+        "threshold": state.case.arrest_threshold,
+        "last_turn_delta": state.last_turn_delta,
+        "last_turn_usefulness": state.last_turn_usefulness,
+    }
+
+
+_CASE_BLOCK = """KNOWN FACTS:
+{known_facts}
+
+POLICY RULES:
+{policy}
+
+ON THE TABLE IN FRONT OF YOU — you already have these, never ask the suspect
+for anything they would tell you:
+{room_objects}
+
+VISIBLE CASE LOG:
+{case_log}
+
+WHAT THIS TURN'S ANSWER ALREADY PRODUCED (checked against the evidence, not yet
+in the case log above):
+{findings_this_turn}
+
+THE SUSPECT'S OWN WORDS — the only statements that can contradict each other:
+{suspect_words}
+
+FULL TRANSCRIPT (your own side's lines are here for context; they are NOT
+things the suspect said):
+{transcript}
+
+Running summary of the account so far (empty on turn 1):
+{prior_summary}
+
+Topics already exhausted — closed, not to be reworded:
+{exhausted_targets}
+
+ALREADY BANKED — these subjects have been established and scored. Pressing them
+again establishes nothing new, however the question is worded. Use them as
+leverage if it helps, but do not spend a turn trying to win them twice:
+{banked_subjects}
+
+Recent moves already made:
+{move_history}
+
+Questions remaining: {remaining}
+Case strength: {score}/{threshold}
+Last turn: +{last_turn_delta}, usefulness={last_turn_usefulness}"""
+
+
 skeptic_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
         """You are the Skeptical Investigator in an internal war room — the
-voice arguing to press harder, right now. Find the strongest legitimate
-pressure point: established contradictions, policy admissions, material
-unsupported explanations, evasion, or diversion. Read HOW the suspect is
-answering, not just what they say — someone perfectly calm while sitting on a
-strong contradiction is stalling; someone who suddenly gets rattled or
-over-explains just got close to something.
+voice arguing to press harder, right now.
+
+You have the whole case in front of you: every fact, every policy rule, the
+whole transcript. Use them together, not one at a time. Put an amount against
+a spending cap, a date against an approved itinerary, a delay against a
+reporting deadline. The strongest pressure point is usually a conclusion that
+follows from two things nobody has yet put side by side.
+
+Read HOW the suspect is answering, not just what they say — someone perfectly
+calm while sitting on a strong contradiction is stalling; someone who suddenly
+gets rattled or over-explains just got close to something.
 
 Do not assume an unresolved claim is false.
-Do not invent evidence.
-Do not chase irrelevant side stories just because they are new.
-Do not propose fetching a document, calling a witness, or checking a record —
+Never state a document, record or check as existing unless it is literally in
+the known facts or the case log.
+Do not chase a side story just because it is new.
+Do not propose fetching a document, calling a witness or checking a record —
 propose what to ASK or how to CONFRONT, right now, in this room.
-You are arguing a position, not filing a status report: be willing to
-disagree with a more cautious read of the same facts."""
+You are arguing a position, not filing a status report: be willing to disagree
+with a more cautious read of the same facts."""
     ),
-    (
-        "human",
-        """Known facts:
-{known_facts}
-
-Suspect's account so far, as ONE story:
-{narrative_summary}
-
-Topics already exhausted (do not target these again, even reworded):
-{exhausted_targets}
-
-On the table in front of you right now:
-{room_objects}
-
-Visible case log:
-{case_log}
-
-Recent transcript:
-{transcript}
-
-Questions remaining: {remaining}
-Current case strength: {score}/{threshold}
-Last turn: +{last_turn_delta}, usefulness={last_turn_usefulness}
-Recent strategy moves: {move_history}"""
-    ),
+    ("human", _CASE_BLOCK),
 ])
 
 
 alternative_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
-        """You are the Alternative-Hypothesis Investigator — the voice
-arguing for caution, right now. Identify the strongest plausible non-fraud
-explanation that still fits what the investigator actually knows, and name
-what would have to be true of an innocent person in this exact spot that this
-suspect hasn't shown yet. Your job is to prevent tunnel vision and stop the
-room from steamrolling a suspect who might be telling the truth.
+        """You are the Alternative-Hypothesis Investigator — the voice arguing
+for caution, right now.
 
+You have the whole case in front of you: every fact, every policy rule, the
+whole transcript. Identify the strongest plausible non-fraud explanation that
+still fits ALL of it, and name what would have to be true of an innocent person
+in this exact spot that this suspect has not yet been given the chance to show.
+
+Use the facts against each other the same way the Skeptic does, but in the
+other direction: a fact that looks damning alone may be ordinary once another
+fact is placed beside it. Say so when that is the case.
+
+Your job is to stop the room steamrolling someone who may be telling the truth.
 Do not invent evidence and do not treat unsupported claims as established.
-Do not propose fetching a document, calling a witness, or checking a record —
+Do not propose fetching a document, calling a witness or checking a record —
 propose what to ASK, right now, that would fairly test the innocent reading.
-You are arguing a position against the Skeptic, not hedging: if the Skeptic's
-read is overreaching, say so plainly."""
+You are arguing against the Skeptic, not hedging: if their read overreaches,
+say so plainly."""
     ),
-    (
-        "human",
-        """Known facts:
-{known_facts}
-
-Suspect's account so far, as ONE story:
-{narrative_summary}
-
-Topics already exhausted (do not target these again, even reworded):
-{exhausted_targets}
-
-On the table in front of you right now:
-{room_objects}
-
-Visible case log:
-{case_log}
-
-Recent transcript:
-{transcript}
-
-Questions remaining: {remaining}
-Current case strength: {score}/{threshold}
-Last turn: +{last_turn_delta}, usefulness={last_turn_usefulness}
-Recent strategy moves: {move_history}"""
-    ),
+    ("human", _CASE_BLOCK),
 ])
 
 
-def _war_input(state: GameState) -> dict:
-    return {
-        "known_facts": _known_facts(state),
-        "case_log": state.case_log.investigator_view(),
-        "transcript": state.transcript[-12:],
-        "remaining": max(state.max_questions - state.question_count, 0),
-        "score": state.score,
-        "threshold": state.case.arrest_threshold,
-        "last_turn_delta": state.last_turn_delta,
-        "last_turn_usefulness": state.last_turn_usefulness,
-        "move_history": state.move_history[-6:],
-        "narrative_summary": state.narrative.summary if state.narrative else "No account given yet.",
-        "exhausted_targets": state.case_log.exhausted_targets or ["- None"],
-        # What is physically on the table. Previously this reached only the
-        # Reality Gate, framed as what the SUSPECT could reach for, so the
-        # investigator had no idea what it was holding — it spent three of
-        # eight questions demanding the restaurant name while the card
-        # statement showing that name sat in front of it.
-        "room_objects": state.case.room_objects or ["- Nothing but the case file"],
-    }
-
-
-def run_skeptic(state: GameState) -> SkepticView:
+def run_skeptic(state: GameState, findings_this_turn=None) -> SkepticView:
     chain = skeptic_prompt | get_llm(0.2).with_structured_output(SkepticView)
-    return invoke_with_retry(chain, _war_input(state))
+    return invoke_with_retry(chain, _full_context(state, findings_this_turn))
 
 
-def run_alternative_hypothesis(state: GameState) -> AlternativeView:
+def run_alternative_hypothesis(state: GameState, findings_this_turn=None) -> AlternativeView:
     chain = alternative_prompt | get_llm(0.2).with_structured_output(AlternativeView)
-    return invoke_with_retry(chain, _war_input(state))
+    return invoke_with_retry(chain, _full_context(state, findings_this_turn))
 
 
-strategist_prompt = ChatPromptTemplate.from_messages([
+mind_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
-        """You are the Lead Investigator adjudicating your own war room.
+        """You are the Lead Investigator. You hold the entire case in your head
+at once — every fact, every policy rule, everything the suspect has said since
+the first question — and from that you decide what to do next.
 
-THINK BEFORE YOU ACT — case_review comes first for a reason:
-You must write case_review BEFORE your target, and the target must actually
-follow from it. Do not pick a target first and rationalize it afterward.
-In case_review, identify the suspect's real central claim or defense — the
-thing their whole story actually rests on — and check whether it has been
-directly tested yet. Recency is not importance: a claim from several turns
-ago that the case log already rates strategic_value=high is not
-automatically less urgent than something mentioned in the suspect's last
-answer. A passing remark, hedge, or aside is not the same as their actual
-defense, even if it's the newest thing said. If the central claim is still
-untested, that is very likely your target — a fresh angle it hasn't been
-hit from yet, not a side detail the suspect happened to mention in passing.
+Work in the order the fields are listed. Each one is meant to change what you
+write in the ones after it.
 
-DO NOT SKIP THE CENTRAL CLAIM JUST BECAUSE IT WILL BE VERIFIED LATER:
-A claim that will eventually be settled by outside records (contacting the
-restaurant, pulling logs) is not "done" for interview purposes — you can
-still press it hard for specific, concrete detail RIGHT NOW (what exactly
-did they order, did they get a corrected receipt, did they raise it with
-the restaurant at the table), and that pressure is often worth more than
-another point on a side thread, both because inconsistencies in the detail
-of a fabricated story are themselves damning, and because it's the central
-tension of this whole interview. Only deprioritize it over a side thread
-when that side thread is something outside verification genuinely CANNOT
-resolve — i.e. something only the suspect's own words can settle.
+1 — THE ACCOUNT
+Update your running picture of what the suspect says happened, in their logic.
 
-NEVER INVENT A FACT INSIDE YOUR OWN REASONING:
-case_review is free prose, which means nothing stops you from writing
-something that sounds plausible but isn't real — a signed document, a
-restaurant record, a confirmed check that never happened. That is exactly
-as forbidden here as it is for the Speaker. Only state something as
-established if it is literally present in known_facts or the case log below.
-If you want to reason about what a future check MIGHT show, say "if
-verified, this would..." — never state it as already true.
+2 — WHAT YOU HAVEN'T USED
+Walk the known facts one at a time and list the ones never yet put to the
+suspect. This is a checklist, not a judgment. An interview that ends with half
+the file unused was not an interview.
 
-WHAT YOU ARE ACTUALLY DOING HERE:
-You are trying to get something out of a person who does not want to give it to
-you. That is the whole job. A clean, well-formed question that gets you nothing
-is a failure. An ugly exchange that gets you one real thing is a win.
+3 — WHAT FOLLOWS
+Draw the conclusions nobody has stated yet, from the facts, the policy rules
+and the suspect's own words together. Do the arithmetic where it bites — an
+amount against a spending cap, a date against an approved itinerary, a delay
+against a reporting deadline, a price against what one person plausibly
+consumes. Ask what would HAVE to be true if their account were true, and
+whether the record shows it. This is where an investigator earns their keep:
+the facts are just paper until someone puts two of them together.
+Every inference must be derivable from what is actually in front of you. Never
+state a document, record or check as existing unless it is literally in
+known_facts or the case log. If you are reasoning about what a future check
+might show, say "if verified, this would" — never state it as already true.
 
-Silence and nonsense are not outcomes you accept — they are problems you work.
-If what you are doing isn't moving them, the answer is usually not more of the
-same; it is a different angle on the same person. You decide what that is.
+You may also take the suspect's account at face value and work out what ELSE
+would have to be true if it were — what another person, business or system
+would have done or noticed. A business reconciles its takings at the end of
+the day. A card terminal displays the amount before the PIN is entered. An
+issuer's dispute window stays open for a fixed period. None of this is
+something you have checked, so none of it is ever a finding or an assertion:
+it is something to put to the suspect, and the gap between what their account
+implies and what they did about it is often the whole case. "A restaurant
+counting its till nightly would have been $2,880 over" is legitimate reasoning
+and belongs here. "The restaurant's records show no correction" is not, unless
+it is in the facts.
 
-A zero-point answer is not automatically a wasted turn:
-- A concrete, checkable commitment is banked for later — park it and open a
-  different independent line rather than re-asking it.
-- Pure evasion with nothing pinned down is the real failure: change the angle,
+4 — THE SUSPECT AGAINST THEMSELVES
+Only the suspect's own words can contradict each other. Use the SUSPECT'S OWN
+WORDS list, never the investigator's questions: your own side often paraphrases
+the suspect's position, sometimes wrongly, and a suspect correcting a
+mischaracterisation is not contradicting themselves.
+Flag only real tension — a walked-back denial, a detail that quietly changed.
+Not an unverified claim, not ordinary added detail, not an inability to recall,
+name or produce something. That last pattern has exactly one home,
+unfalsifiable_account, and must never also appear as a contradiction.
+Set unfalsifiable_account once and only once, when the account has become one
+where nothing in it can be checked by anyone. A suspect who simply refuses to
+answer is stonewalling and is handled elsewhere; this is for one who answers
+freely and says nothing checkable.
+
+5 — THE MOVE
+Two colleagues have already argued this turn, independently, neither having
+seen the other's answer. Their reads are below. Adjudicate between them and
+commit — and say honestly which one actually moved you, in
+innocent_reading_won. A room that records the cautious voice and then always
+does what the Skeptic wanted is not a war room, it is theatre. A clean question that gets you nothing is a
+failure; an ugly exchange that gets you one real thing is a win. Silence and
+nonsense are problems to work, not outcomes to accept — if what you are doing
+is not moving them, the answer is a different angle on the same person, not
+more of the same.
+
+- A concrete, checkable commitment is banked for later: park it and open a
+  different line rather than re-asking it.
+- Pure evasion with nothing pinned down is the real failure. Change the angle,
   narrow the question, or confront the refusal itself.
+- Do not skip the central claim because outside records will settle it later.
+  You can still press it now for specific concrete detail, and inconsistency in
+  the detail of a fabricated story is itself damning.
+- Read HOW they are answering. Someone polished for three answers who suddenly
+  hedges should be pressed on that exact point. Someone flatly calm while
+  sitting on a contradiction may call for direct confrontation. Someone
+  starting to open up may give more with a lighter touch.
+- If the case log's credibility_flags show a Duty to Cooperate note, stop
+  re-asking that question and confront the pattern of refusal itself.
+- exhausted_targets are CLOSED — not to be reworded, narrowed, or approached
+  from a slightly different technical angle. Pick a different open thread, or
+  challenge the account as a whole.
+- WHEN THEY WILL NOT ANSWER, YOU GET TWO ASKS, NOT FIVE. If they have already
+  refused a subject once, your second attempt is not the same question again:
+  it is telling them plainly what their silence will be recorded as, and then
+  moving on. "If you won't account for the receipt, the record shows there was
+  none, and that is a breach on its own." After that the subject is closed to
+  you — it will appear in exhausted_targets — and re-asking it is wasted.
+  Only state a consequence that actually follows: a fact going on the record
+  against them, a policy breach being recorded. Never threaten an arrest, a
+  dismissal, or an end to the interview that you cannot deliver.
+- Watch your register, not just your topic: three turns of the same kind of
+  pressure reads as a script even when the target changes.
+- When the case is weak and few questions remain, be selective and forceful.
+  When there is runway, build independent lines so the case does not rest on
+  one point of failure.
+- Never propose fetching a document, calling a witness or checking a record.
+  Everything you decide is something to ASK or CONFRONT, in this room, now.
 
-REACT TO THE PERSON, NOT JUST THE TRANSCRIPT:
-- The Skeptic and Alternative voices disagree on purpose. Pick a side this turn
-  and say so in your rationale — do not average them into a generic question.
-- HOW the suspect is answering is real signal, and you can read it straight from
-  the transcript. Someone who was polished for three answers and suddenly starts
-  hedging right after a specific point should usually be pressed on that exact
-  point again, not moved past. Someone staying flatly calm while sitting on a
-  strong contradiction may call for direct confrontation rather than another
-  open question. Someone who just started genuinely opening up after pressure
-  may give you more with a lighter touch before you go back on the attack.
-- If the case log's credibility_flags show a Duty to Cooperate note (repeated
-  non-substantive answers to a specific question), stop repeating that exact
-  question — accuse or confront the pattern of refusal itself instead of the
-  underlying fact a third time.
+PREVIOUSLY IDENTIFIED CONTRADICTIONS (do not repeat these):
+{prior_contradictions}
 
-ANTI-REPETITION IS MANDATORY:
-- Your repetition_check field is not a formality — actually compare your
-  planned target against EVERY move in move_history BY MEANING, not just
-  the most recent one, before you commit to it. Two questions asking the
-  same underlying thing in different words are still the same question,
-  whether that was last turn or five turns ago. If you catch yourself
-  repeating, change the actual substance of the target, not just its
-  wording.
-- Read parked_threads, leads, and recent move_history.
-- Do not ask for the same commitment again once captured.
-- Do not keep demanding outside proof for a thread already marked
-  pending_verification. The interview room is for commitments; outside checks happen
-  after the interview.
-- Revisit a parked thread only if genuinely new information created a new
-  contradiction or a materially different question.
-- Watch your own register, not just your topic: three turns of the same kind
-  of pressure reads as a script even when the target text changes each time.
-  If the last two moves came at the suspect the same way and produced no
-  concession, either escalate to a direct accusation or change register
-  entirely (move to an independent thread, or challenge the whole account)
-  rather than reaching for the same approach a third time.
-- exhausted_targets in the case log are CLOSED. Do not select a target that
-  is the same topic as one of them, even rephrased or narrowed to a slightly
-  different technical angle — that is exactly the trap of re-litigating the
-  same point in different words instead of moving the interview forward.
-  Pick a different open thread, or challenge the suspect's account as a
-  WHOLE using the narrative summary below instead of one more micro-detail
-  of an already-exhausted point.
-
-QUESTION-BUDGET PRESSURE:
-- When case strength is weak and few questions remain, become selective and forceful:
-  target the highest expected evidentiary-value vulnerability, press evasion, or seek
-  a precise admission/commitment.
-- When there is runway, build independent lines rather than overworking one thread.
-- Even if one later verification looks promising, continue seeking independent
-  evidence so the case does not depend on one point of failure.
-
-Never invent evidence or pretend a future verification has already happened.
-
-Your target is free-form and carries BOTH what you are going after and how you
-intend to come at it — state it the way you would tell a partner what you are
-about to do ("corner him on the shifting story about the notifications",
-"drop the receipt line entirely and make him account for the calendar")."""
+HAS THE UNFALSIFIABLE-ACCOUNT PATTERN ALREADY BEEN FLAGGED?
+{already_flagged_unfalsifiable}"""
     ),
     (
         "human",
-        """Current case strength: {score}/{threshold}
-Questions remaining: {remaining}
-Last turn score gain: +{last_turn_delta}
-Last turn usefulness: {last_turn_usefulness}
-Recent move history: {move_history}
+        """KNOWN FACTS:
+{known_facts}
 
-Suspect's account so far, as ONE story:
-{narrative_summary}
+POLICY RULES:
+{policy}
 
-Topics already exhausted (do not target these again, even reworded):
-{exhausted_targets}
-
-On the table in front of you right now — you already have these, do not ask
-the suspect for anything they would tell you:
+ON THE TABLE IN FRONT OF YOU — you already have these, never ask the suspect
+for anything they would tell you:
 {room_objects}
 
-Skeptic (arguing to press harder):
-{skeptic}
-
-Alternative Hypothesis (arguing for caution):
-{alternative}
-
-Visible case log:
+VISIBLE CASE LOG:
 {case_log}
 
-Recent transcript:
-{transcript}"""
+WHAT THIS TURN'S ANSWER ALREADY PRODUCED (checked against the evidence, not yet
+in the case log above):
+{findings_this_turn}
+
+THE SKEPTIC (argued to press harder, blind to the Alternative):
+{skeptic}
+
+THE ALTERNATIVE HYPOTHESIS (argued for caution, blind to the Skeptic):
+{alternative}
+
+THE SUSPECT'S OWN WORDS — the only statements that can contradict each other:
+{suspect_words}
+
+FULL TRANSCRIPT (your own lines are here for context; they are NOT things the
+suspect said):
+{transcript}
+
+Previous running summary (empty on turn 1):
+{prior_summary}
+
+Topics already exhausted — closed, not to be reworded:
+{exhausted_targets}
+
+ALREADY BANKED — these subjects have been established and scored. Pressing them
+again establishes nothing new, however the question is worded. Use them as
+leverage if it helps, but do not spend a turn trying to win them twice:
+{banked_subjects}
+
+Recent moves you have already made:
+{move_history}
+
+Questions remaining: {remaining}
+Case strength: {score}/{threshold}
+Last turn: +{last_turn_delta}, usefulness={last_turn_usefulness}"""
     ),
 ])
 
-def run_strategist(
+
+def run_investigator_mind(
     state: GameState,
-    allowed_moves: list[str] | None = None,
+    findings_this_turn: list[CheckResult] | None = None,
     return_debug: bool = False,
 ):
-    skeptic = run_skeptic(state)
-    alternative = run_alternative_hypothesis(state)
+    """The Lead Investigator: holds the account as one story and decides.
 
-    war_input = _war_input(state)
-    chain = strategist_prompt | get_llm(0.3).with_structured_output(StrategistMove)
-    move = invoke_with_retry(chain, {
-        "score": state.score,
-        "threshold": state.case.arrest_threshold,
-        "remaining": max(state.max_questions - state.question_count, 0),
-        "last_turn_delta": state.last_turn_delta,
-        "last_turn_usefulness": state.last_turn_usefulness,
-        "move_history": state.move_history[-6:],
-        "narrative_summary": war_input["narrative_summary"],
-        "exhausted_targets": war_input["exhausted_targets"],
-        "room_objects": war_input["room_objects"],
-        "skeptic": skeptic.model_dump(),
-        "alternative": alternative.model_dump(),
-        "case_log": state.case_log.investigator_view(),
-        "transcript": state.transcript[-12:],
-    })
+    This absorbed the old narrative-synthesis call, but deliberately NOT the
+    two war-room voices. They stay separate because the point of a war room is
+    two reads formed without knowledge of each other — as sequential fields in
+    one schema they become one train of thought that already knows which side
+    it prefers.
+    """
+    skeptic = run_skeptic(state, findings_this_turn)
+    alternative = run_alternative_hypothesis(state, findings_this_turn)
+
+    context = _full_context(state, findings_this_turn)
+    context["skeptic"] = skeptic.model_dump()
+    context["alternative"] = alternative.model_dump()
+    context["prior_contradictions"] = list(state.case_log.contradictions) or ["- None yet"]
+    context["already_flagged_unfalsifiable"] = (
+        "YES — already flagged. Leave unfalsifiable_account null this turn "
+        "and every turn from now on."
+        if state.unfalsifiable_flagged else
+        "No — not yet flagged."
+    )
+
+    chain = mind_prompt | get_llm(0.3).with_structured_output(InvestigatorMind)
+    mind = invoke_with_retry(chain, context)
 
     if return_debug:
-        return move, WarRoomBundle(
-            skeptic=skeptic,
-            alternative=alternative,
-        )
-
-    return move
+        return mind, WarRoomBundle(skeptic=skeptic, alternative=alternative)
+    return mind
 
 
 speaker_prompt = ChatPromptTemplate.from_messages([
@@ -1235,7 +1186,7 @@ Next line:"""
 
 def run_speaker(
     case: CaseFile,
-    move: StrategistMove,
+    move: InvestigatorMind,
     transcript: list[dict],
     score: int = 0,
     case_log=None,

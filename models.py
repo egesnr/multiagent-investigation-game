@@ -9,7 +9,35 @@ into the War Room or Speaker unless the investigator has actually established it
 
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+
+# Longest a model-authored free-text field may be before it is treated as
+# broken output rather than an answer. Generous: the longest legitimate
+# case_review seen in testing was around 1,200 characters.
+MAX_FIELD_CHARS = 4000
+
+
+def sane_text(value: str, limit: int = MAX_FIELD_CHARS) -> str:
+    """Truncate a runaway model field, and say so in the value itself.
+
+    Kept visible rather than silent: a truncated field in a log is a signal
+    that the model degenerated on that call, which is worth noticing.
+    """
+    if not isinstance(value, str) or len(value) <= limit:
+        return value
+    return (
+        value[:limit].rstrip()
+        + f" …[truncated: model emitted {len(value)} characters]"
+    )
+
+
+def _truncating_validator(*fields: str):
+    """Attach sane_text to the named fields of a model."""
+    return field_validator(*fields, mode="after")(
+        classmethod(lambda cls, v: sane_text(v) if isinstance(v, str) else v)
+    )
 
 
 class Certainty(str, Enum):
@@ -177,6 +205,10 @@ class CheckResult(BaseModel):
     # instead of only existing as a console print during the run.
     relation: EvidenceRelation = EvidenceRelation.NEUTRAL
 
+    # Carried through from the Extractor (not re-decided by the Checker) so the
+    # scoring key can group restatements of one topic together.
+    subject: str = ""
+
     claim_type: ClaimType = ClaimType.BACKGROUND
     verification_status: ClaimStatus = ClaimStatus.UNVERIFIED
     strategic_value: str = Field(default="low", description="One of: low, medium, high")
@@ -189,8 +221,11 @@ class CheckResult(BaseModel):
     # must never be treated as a firm story-history contradiction (see game_logic).
     ambiguous: bool = False
 
+    _keep_text_sane = _truncating_validator("quoted_evidence", "rationale", "subject", "suggested_thread")
+
 
 class ClaimRecord(BaseModel):
+    subject: str = ""
     text: str
     turn: int
     status: ClaimStatus = ClaimStatus.UNVERIFIED
@@ -206,6 +241,20 @@ class ClaimRecord(BaseModel):
     suggested_thread: Optional[str] = None
     ambiguous: bool = False
 
+    _keep_text_sane = _truncating_validator("text", "rationale", "subject", "suggested_thread")
+
+
+class AnswerEngagement(str, Enum):
+    """Whether the answer addressed the question that was actually asked.
+
+    Not a judgment of honesty — a liar who gives a full account is ANSWERED.
+    This is only about whether the investigator got a response to their
+    question or was left holding it.
+    """
+
+    ANSWERED = "answered"
+    DODGED = "dodged"
+
 
 class ClaimNoveltyStatus(str, Enum):
     NEW = "new"
@@ -214,6 +263,18 @@ class ClaimNoveltyStatus(str, Enum):
 
 
 class ExtractedClaimItem(BaseModel):
+    # Declared before `text` on purpose: naming what the claim is ABOUT before
+    # writing the claim forces the model to locate it on the existing record
+    # rather than compose a fresh sentence and then try to remember whether
+    # something like it was already said. This is also what makes scoring
+    # dedup possible at all — see game_logic._claim_key.
+    subject: str = Field(
+        description="What this claim is about, as a short noun phrase: the "
+        "topic slot it occupies on the record. Not the assertion itself — "
+        "two claims that disagree share one subject. If a subject already on "
+        "record covers this claim, reuse that wording EXACTLY. Invent a new "
+        "subject only when nothing on record covers it."
+    )
     text: str = Field(description="The complete, standalone factual claim.")
     status: ClaimNoveltyStatus = Field(
         description="NEW if not previously stated, REITERATED if it restates a "
@@ -240,6 +301,39 @@ class ExtractedClaimItem(BaseModel):
 
 
 class ExtractedClaims(BaseModel):
+    # The dodge verdict is declared BEFORE the claims for the usual reason:
+    # deciding whether the question was answered, while the question is still
+    # the thing in mind, is more reliable than extracting content first and
+    # then reverse-engineering whether it was responsive.
+    engagement: AnswerEngagement = Field(
+        default=AnswerEngagement.ANSWERED,
+        description="DODGED if the answer did not address what was asked — a "
+        "refusal, an insult, a change of subject, a non-answer, or content "
+        "about something else entirely. ANSWERED if the suspect gave an "
+        "account of the thing asked about, however implausible, however "
+        "partial, and however hostile the tone. Being wrong is answering. "
+        "Being rude while answering is answering. Saying they cannot recall "
+        "is answering IF the question was about their memory or knowledge; it "
+        "is dodging if the question asked them to produce or account for "
+        "something concrete.",
+    )
+    dodged_subject: Optional[str] = Field(
+        default=None,
+        description="When DODGED: the subject the investigator asked about, "
+        "as a short noun phrase, in the same form a claim's subject takes. "
+        "Reuse a subject already on record when it is the same topic. Null "
+        "when ANSWERED.",
+    )
+    dodge_settles_fact: bool = Field(
+        default=False,
+        description="When DODGED: true only if the question asked the suspect "
+        "to PRODUCE or ACCOUNT FOR something that either exists or does not — "
+        "a receipt, a document, a name, a date, a witness. Refusing to produce "
+        "it is evidence it does not exist. False when the question asked them "
+        "to admit wrongdoing, explain their intentions, or say what they knew "
+        "or meant: silence can never establish a state of mind, and a refusal "
+        "to confess is NEVER an admission. If in doubt, false.",
+    )
     claims: list[ExtractedClaimItem] = Field(default_factory=list)
     new_defenses: list[str] = Field(default_factory=list)
 
@@ -251,6 +345,17 @@ class SelfContradiction(BaseModel):
     cannot find on its own: it requires holding two things said in different
     turns in mind at once and noticing they don't sit together."""
 
+    subject: str = Field(
+        description="What the tension is ABOUT, as a short noun phrase — the "
+        "topic slot it occupies on the record, the same way an extracted "
+        "claim carries one. Declared before claim_text on purpose: name the "
+        "topic before writing the sentence, so a tension already on record "
+        "gets recognised instead of re-described in fresh words. If a "
+        "contradiction about this subject has already been flagged, you are "
+        "restating it, not finding a new one. 'The suspect's basis for the "
+        "$320 figure' is a subject; every rewording of 'they claim to know "
+        "the amount but cannot support it' belongs to that one subject."
+    )
     claim_text: str = Field(
         description="A single, self-contained statement of the tension for "
         "the case log and the investigator, e.g. 'The suspect's account of "
@@ -259,6 +364,17 @@ class SelfContradiction(BaseModel):
     )
     earlier_statement: str = Field(description="The earlier statement, quoted or closely paraphrased.")
     later_statement: str = Field(description="The later statement that sits badly against it.")
+    why_incompatible: str = Field(
+        description="State what must be true for the earlier statement to hold, "
+        "what must be true for the later one, and why both cannot hold at "
+        "once. Declared before the impact rating on purpose: write this "
+        "sentence first, and if you cannot write it, there is no "
+        "contradiction — leave the item out entirely rather than rating it. "
+        "Observed without this field: 'he says $320 is the right price, so the "
+        "restaurant charged ten times that, so nobody added a zero' was filed "
+        "as a strong contradiction, when charging ten times is precisely what "
+        "adding a zero does."
+    )
     evidentiary_impact: EvidentiaryImpact = Field(
         description="How damaging THIS specific self-contradiction is to the "
         "suspect's credibility, same rubric as evidentiary impact elsewhere: "
@@ -332,6 +448,8 @@ class InvestigationLead(BaseModel):
     importance: str = "medium"
     future_verification_value: FutureVerificationValue = FutureVerificationValue.NONE
     notes: Optional[str] = None
+
+    _keep_text_sane = _truncating_validator("topic", "source_claim", "notes")
 
 
 class CaseLog(BaseModel):
@@ -485,6 +603,124 @@ class StrategistMove(BaseModel):
     expected_value: str = Field(default="medium", description="low, medium, or high")
 
 
+class InvestigatorMind(BaseModel):
+    """One read of the whole case, replacing four separate calls (narrative
+    synthesis, skeptic, alternative hypothesis, strategist).
+
+    Those four were split by INFORMATION as well as by task, and each saw a
+    different slice of the world: the narrative agent read the entire
+    transcript but was never shown a single fact or policy rule, the skeptic
+    had facts but no policy, and the strategist — the one actually choosing
+    the next question — had neither. So no agent in the room could notice
+    that a $1,150 bottle is absurd for one diner, or that a claimed $320
+    dinner still breaches a $75 cap: those inferences need the bill, the
+    policy and the answer in one head, and no head had all three.
+
+    Field order is the reasoning order. unused_facts and inferences come
+    before every judgment for the same reason case_review precedes target:
+    structured output is generated in schema order, so the model must walk
+    the evidence and draw conclusions from it BEFORE it is allowed to pick
+    what to ask.
+    """
+
+    # --- 1. read the whole picture ---
+    account_summary: str = Field(
+        description="3-5 sentences: the suspect's account of what happened, as "
+        "they have told it so far across the whole interview, in their own "
+        "logic — not whether you believe it."
+    )
+    unused_facts: list[str] = Field(
+        default_factory=list,
+        description="Go through the known facts one by one and list every fact "
+        "that has NOT yet been put to the suspect in any question. Just the "
+        "fact ids or short labels. This is a checklist, not a judgment: if a "
+        "fact is sitting there unused, it belongs in this list even if you do "
+        "not intend to use it this turn. Empty only when genuinely all of them "
+        "have been raised."
+    )
+    inferences: list[str] = Field(
+        default_factory=list,
+        description="What follows from combining the facts, the policy rules "
+        "and what the suspect has actually said — conclusions nobody has "
+        "stated yet. Do arithmetic where it bites (an amount against a cap, a "
+        "date against an itinerary, a timing against a deadline), and ask what "
+        "would have to be true if their account were true. Each entry must be "
+        "derivable from known_facts, the policy, or the suspect's own words — "
+        "never from something you assume or would like to be true. Empty if "
+        "nothing genuinely follows."
+    )
+
+    # --- 2. findings that score ---
+    self_contradictions: list[SelfContradiction] = Field(
+        default_factory=list,
+        description="Only genuinely new tensions surfaced by THIS turn's answer "
+        "against something the suspect said earlier. Not against outside facts "
+        "— that is the Checker's job. Do not re-list a tension already "
+        "identified in a previous turn.",
+    )
+    unfalsifiable_account: Optional[SelfContradiction] = Field(
+        default=None,
+        description="Set ONCE, ever, when the suspect's account has become one "
+        "where nothing in it can be checked by anyone: cannot recall, cannot "
+        "name, no documentation, the only witness unavailable. Not the same as "
+        "a claim merely being unverified — it is the shape of the WHOLE "
+        "account. Leave null while they are still offering checkable detail, "
+        "and null on every turn after it has been flagged once.",
+    )
+    stale_thread: Optional[str] = Field(
+        default=None,
+        description="Set only if the last 3+ questions circled the same "
+        "underlying point without the suspect adding anything new, however "
+        "differently worded. Name the topic in a few words. Null if the thread "
+        "is still producing movement — staying on a point that keeps cracking "
+        "open is good interrogation, not a stale thread."
+    )
+
+    # --- 3. the decision ---
+    # The two war-room reads are NOT fields here. They arrive as input, from
+    # two calls that could not see each other's answer. One model writing both
+    # sides in sequence is not a debate — it already knows which side it wants,
+    # and can write a weak innocent reading to justify it.
+    case_review: str = Field(
+        description="Having weighed both readings above, think through the case "
+        "before deciding anything: the suspect's actual central claim, which "
+        "unresolved points carry high strategic value regardless of how long "
+        "ago they were raised, and which of those is still genuinely untested. "
+        "Your target must follow from this. Every factual assertion here must "
+        "trace to known_facts, the policy, or the case log — if something is "
+        "unconfirmed, say so."
+    )
+    repetition_check: str = Field(
+        description="Restate what EVERY move in move_history was actually "
+        "asking — the underlying question, not the wording — then check "
+        "whether your planned target asks any one of them again in different "
+        "clothes. Judge by meaning: a question from turn 1 is exactly as "
+        "repeated as one from last turn. If it repeats, pick a different "
+        "thread and say so here."
+    )
+    target: str = Field(
+        description="Free-form thread to pursue next, carrying both what you "
+        "are going after and how you intend to come at it, as you would tell a "
+        "partner ('corner him on the shifting story about the notifications'). "
+        "Any specific you reference — a number, a document, something the "
+        "suspect saw — must be something they actually said or a fact from "
+        "known_facts. Never invent a specific because it seems a likely "
+        "inference."
+    )
+    innocent_reading_won: bool = Field(
+        description="True if the Alternative's read actually changed what you "
+        "are about to do — softened the target, redirected it, or stopped you "
+        "pressing something. False if you went with the Skeptic. Answer for "
+        "what you actually did, not for what sounds balanced."
+    )
+    rationale: str = Field(
+        description="Why this move over the other side's. Name which read won "
+        "and why the other was outweighed — an adjudication, not a restatement "
+        "of both."
+    )
+    expected_value: str = Field(default="medium", description="low, medium, or high")
+
+
 class VerificationStatus(str, Enum):
     CONFIRMED = "confirmed"
     DISPROVED = "disproved"
@@ -527,6 +763,23 @@ class GameState(BaseModel):
     max_questions: int = 8
 
     scored_findings: list[str] = Field(default_factory=list)
+
+    # Distinct subjects the suspect has refused to address, in the order they
+    # were first dodged. The stall charge escalates down this list, so refusing
+    # broadly costs far more than refusing the same thing repeatedly — which is
+    # also the only version an investigator would actually care about.
+    dodged_subjects: list[str] = Field(default_factory=list)
+    # How many times each has been dodged. At two, the investigator states what
+    # the silence will be recorded as and the subject closes to further asking.
+    dodge_counts: dict[str, int] = Field(default_factory=dict)
+    # Reversible half: the fact taken as established because the suspect would
+    # not address it. Released if they later answer. The stall charge is not.
+    dodge_fact_points: dict[str, int] = Field(default_factory=dict)
+    # Human-readable twin of scored_findings, for the investigator's own
+    # context. The keys above are internal and unreadable; these are the
+    # subjects themselves, so the room can be told plainly which ground is
+    # already banked and will not pay again.
+    banked_subjects: list[str] = Field(default_factory=list)
 
     # Claim text -> provisional suspicion points awarded in the room for an
     # unverified defense. Resolution refunds these if verification confirms

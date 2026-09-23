@@ -35,15 +35,25 @@ IMPACT_POINTS = {
     EvidentiaryImpact.DECISIVE: 25,
 }
 
-# Points added once for every STONEWALL_STREAK_LENGTH consecutive turns with
-# no evidentiary gain and nothing substantive to check (see
-# GameState.consecutive_stonewall and the "Duty to Cooperate" policy). Without
-# this, pure non-cooperation ("no comment" every turn) was strictly better
-# for the suspect than even a liar who got partially caught, since evasion
-# was tracked (risk_profile.evasion) but never actually cost anything — most
-# refusals don't even produce an extracted claim for that flag to attach to.
-STONEWALL_STREAK_LENGTH = 3
-STONEWALL_PENALTY = 12
+# Refusing to engage is charged per DISTINCT subject refused, escalating, and
+# it does not come back off. Measured against the old rule this replaces: eight
+# turns of flat denial cost 24 and finished one point under the threshold,
+# because the charge fired only every third turn — refusing for eight turns
+# cost the same per turn as refusing for three.
+#
+# Escalating on distinct subjects rather than on repetitions is deliberate. It
+# means saying "no comment" five times about the receipt is one refusal, not
+# five, and the only way the charge grows is if the suspect refuses to engage
+# with the case broadly — which is the thing an investigator would actually
+# hold against them.
+STALL_CHARGE = [6, 12, 18, 24]
+STALL_CHARGE_MAX = 30
+
+# The other half of a dodge, and the reversible one: the investigator asked the
+# suspect to produce or account for something, and was refused, so the record
+# takes it as not existing. Returned in full if they later answer it — the fact
+# is released, the stall charge above is not.
+DODGE_FACT_POINTS = 8
 
 # An unverified defense the suspect cannot substantiate raises suspicion even
 # though nothing is proven yet. Scaled by how central the Checker judged the
@@ -60,13 +70,113 @@ def apply_tier(score: int) -> int:
 
 
 def _claim_key(result: CheckResult) -> str:
-    """Stable-ish key used only to stop the same finding being farmed repeatedly."""
+    """Identity of a finding, used to stop the same one being farmed repeatedly.
+
+    Keyed on the claim's SUBJECT, not its wording. Keying on prose was the
+    whole reason a suspect could be scored six times for one behaviour: six
+    insults are six different sentences, so they were six different keys and
+    six separate strong findings, +90 for what an investigator would record
+    once as "refused to cooperate and was hostile throughout". Any restatement
+    dressed in new words defeated a text key by construction.
+
+    verification_status stays in the key deliberately: a subject that was an
+    unverified excuse earlier and is a proven contradiction now is genuinely
+    new ground, and must still be able to score.
+    """
     if result.fact_id:
         return f"{result.basis.value}:fact:{result.fact_id}:{result.verification_status.value}"
-    return (
-        f"{result.basis.value}:{result.verification_status.value}:"
-        f"{result.quoted_evidence.strip().lower()}"
+
+    subject = result.subject.strip().lower()
+    if not subject:
+        # Nothing should reach here. A subjectless finding falls back to a
+        # prose key, and a prose key is the bug this whole function exists to
+        # kill — it is what let one contradiction score seven times under
+        # seven different sentences. Every producer of a CheckResult must
+        # supply a subject; say so loudly rather than silently mis-scoring.
+        print(
+            "  [warning] finding has no subject, scoring falls back to prose: "
+            f"{result.quoted_evidence[:70]}"
+        )
+        return (
+            f"{result.basis.value}:{result.verification_status.value}:"
+            f"{result.quoted_evidence.strip().lower()}"
+        )
+
+    # Two bands only. Which shade of established a finding is — supported,
+    # admitted, contradicted — and which stage of the Checker produced it are
+    # not facts about the suspect; they are routing. Keeping them in the key
+    # let one behaviour score again every time it was classified differently.
+    band = (
+        "provisional"
+        if result.verification_status == ClaimStatus.UNVERIFIED
+        else "established"
     )
+    return f"{band}:{subject}"
+
+
+def charge_for_dodge(state: GameState, subject: str, settles_fact: bool) -> tuple[int, list[str]]:
+    """Charge a refusal to engage with `subject`, and say what it cost.
+
+    Two different things happen and they behave differently afterwards:
+      - the stall charge, which is about conduct and is permanent
+      - the fact charge, which stands in for evidence the suspect would not
+        produce, and is refunded the moment they do
+    """
+    subject = subject.strip()
+    if not subject:
+        return 0, []
+
+    lines: list[str] = []
+    points = 0
+
+    first_time = subject not in state.dodged_subjects
+    if first_time:
+        state.dodged_subjects.append(subject)
+        index = len(state.dodged_subjects) - 1
+        charge = (
+            STALL_CHARGE[index] if index < len(STALL_CHARGE) else STALL_CHARGE_MAX
+        )
+        points += charge
+        lines.append(
+            f"refused to engage with '{subject}' "
+            f"({_ordinal(len(state.dodged_subjects))} subject refused) (+{charge})"
+        )
+
+        # Only a question that asked for something producible settles a fact.
+        # A refusal to confess establishes nothing — see the Extractor's
+        # dodge_settles_fact rule.
+        if settles_fact:
+            state.dodge_fact_points[subject] = DODGE_FACT_POINTS
+            points += DODGE_FACT_POINTS
+            lines.append(
+                f"'{subject}' taken as established, unaddressed "
+                f"(+{DODGE_FACT_POINTS}, released if answered later)"
+            )
+
+    state.dodge_counts[subject] = state.dodge_counts.get(subject, 0) + 1
+    return points, lines
+
+
+def release_dodged_fact(state: GameState, subject: str) -> tuple[int, str | None]:
+    """The suspect finally addressed something they had refused. Give back the
+    fact points; keep the stall charge. Answering late does not undo having
+    stalled, but it must always be worth doing."""
+    subject = subject.strip()
+    points = state.dodge_fact_points.pop(subject, 0)
+    if not points:
+        return 0, None
+    return -points, f"'{subject}' answered after refusing (-{points})"
+
+
+def _ordinal(n: int) -> str:
+    return {1: "1st", 2: "2nd", 3: "3rd"}.get(n, f"{n}th")
+
+
+def _bank_subject(state: GameState, result: CheckResult) -> None:
+    """Record, in plain words, that this subject has now been paid for."""
+    subject = result.subject.strip()
+    if subject and subject not in state.banked_subjects:
+        state.banked_subjects.append(subject)
 
 
 def _lead_key(text: str) -> str:
@@ -95,8 +205,16 @@ def _effective_status(result: CheckResult) -> ClaimStatus:
 
 
 def update_case_log(results: list[CheckResult], state: GameState) -> GameState:
+    # Same identity rule as _claim_key: a claim is placed by its subject, so a
+    # reworded restatement lands on the entry already there instead of adding a
+    # near-duplicate line the War Room then reads as further evidence.
     existing_claims = {
-        (c.text.strip().lower(), c.related_fact_id, c.status.value, c.basis.value)
+        (
+            (c.subject.strip().lower() or c.text.strip().lower()),
+            c.related_fact_id,
+            c.status.value,
+            c.basis.value,
+        )
         for c in state.case_log.claims
     }
     existing_leads = {_lead_key(lead.topic): lead for lead in state.case_log.leads}
@@ -105,7 +223,7 @@ def update_case_log(results: list[CheckResult], state: GameState) -> GameState:
         text = result.quoted_evidence.strip()
         status = _effective_status(result)
         signature = (
-            text.lower(),
+            result.subject.strip().lower() or text.lower(),
             result.fact_id,
             status.value,
             result.basis.value,
@@ -114,6 +232,7 @@ def update_case_log(results: list[CheckResult], state: GameState) -> GameState:
         if signature not in existing_claims:
             state.case_log.claims.append(
                 ClaimRecord(
+                    subject=result.subject,
                     text=text,
                     turn=state.question_count,
                     status=status,
@@ -210,6 +329,7 @@ def calculate_claim_score(result: CheckResult, state: GameState) -> tuple[int, s
         if key in state.scored_findings:
             return 0, None
         state.scored_findings.append(key)
+        _bank_subject(state, result)
         # Recorded per-claim so resolution can take it back off the board if
         # the claim turns out to be true.
         state.provisional_findings[result.quoted_evidence.strip()] = points
@@ -224,6 +344,7 @@ def calculate_claim_score(result: CheckResult, state: GameState) -> tuple[int, s
         return 0, None
 
     state.scored_findings.append(key)
+    _bank_subject(state, result)
     return points, f"{result.evidentiary_impact.value} established finding (+{points})"
 
 
@@ -255,6 +376,9 @@ def process_turn_scoring(
     results: list[CheckResult],
     state: GameState,
     player_answer: str = "",
+    dodged_subject: str | None = None,
+    dodge_settles_fact: bool = False,
+    answered_subjects: list[str] | None = None,
 ) -> tuple[int, GameState]:
     raw_delta = 0
     breakdown: list[str] = []
@@ -274,31 +398,43 @@ def process_turn_scoring(
     final_delta = raw_delta
     usefulness = _turn_usefulness(results, final_delta)
 
-    # Track sustained non-cooperation. A single evasive or empty turn is
-    # normal interview friction, not conduct; a run of them under the
-    # "Duty to Cooperate" policy is itself an adverse signal.
-    if usefulness in {"no_useful_answer", "evasion_no_gain"}:
+    # A refusal to engage is now recognised directly by the Extractor, against
+    # the question that was actually asked, instead of being inferred from a
+    # turn that happened to score nothing. Those are not the same thing: an
+    # honest answer can score nothing, and a fluent evasion can score a little.
+    if dodged_subject:
         state.consecutive_stonewall += 1
+        dodge_points, dodge_lines = charge_for_dodge(
+            state, dodged_subject, dodge_settles_fact
+        )
+        final_delta += dodge_points
+        breakdown.extend(dodge_lines)
+
+        # Surfaced in the shared case log, not only in the number, so the room
+        # and the resolution can refer to the pattern rather than just feel it.
+        if state.dodge_counts.get(dodged_subject.strip(), 0) >= 2:
+            note = (
+                f"Suspect refused twice to address {dodged_subject.strip()} "
+                "after being told what the silence would be recorded as "
+                "(Duty to Cooperate)."
+            )
+            if note not in state.case_log.credibility_flags:
+                state.case_log.credibility_flags.append(note)
+            # Closed to further asking. The suspect can still reopen it by
+            # speaking to it; the investigator cannot re-ask it cold.
+            if dodged_subject.strip() not in state.case_log.exhausted_targets:
+                state.case_log.exhausted_targets.append(dodged_subject.strip())
     else:
         state.consecutive_stonewall = 0
 
-    obstruction_penalty = 0
-    if (
-        state.consecutive_stonewall > 0
-        and state.consecutive_stonewall % STONEWALL_STREAK_LENGTH == 0
-    ):
-        obstruction_penalty = STONEWALL_PENALTY
-        final_delta += obstruction_penalty
-        # Surface it in the shared case log (not just the score number) so
-        # War Room/Speaker/Resolution can actually reference the pattern
-        # instead of only feeling its numeric effect.
-        note = (
-            f"Suspect gave {state.consecutive_stonewall} consecutive "
-            "non-substantive answers to specific, repeated questions "
-            "(Duty to Cooperate)."
-        )
-        if note not in state.case_log.credibility_flags:
-            state.case_log.credibility_flags.append(note)
+    # Answering something previously refused releases the fact, never the
+    # stall. Talking must always improve your position; it just cannot undo
+    # having stalled.
+    for subject in answered_subjects or []:
+        refund, line = release_dodged_fact(state, subject)
+        if refund:
+            final_delta += refund
+            breakdown.append(line)
 
     state.score += final_delta
     state.last_turn_delta = final_delta
@@ -311,12 +447,6 @@ def process_turn_scoring(
             print(f"  • {item}")
     else:
         print("  • No new established incriminating evidence (+0)")
-    if obstruction_penalty:
-        print(
-            f"  • {state.consecutive_stonewall} consecutive turns of "
-            f"non-cooperation -> Duty to Cooperate breach (+{obstruction_penalty})"
-        )
-
     print(
         f"  Total Turn Delta: +{final_delta} | New Score: {state.score}"
         "\n-----------------------"
