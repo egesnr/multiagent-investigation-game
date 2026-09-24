@@ -56,6 +56,17 @@
       ]
     },
     {
+      "id": "merchant_name",
+      "description": "The merchant name printed on the corporate card statement for that charge",
+      "true_value": "Vidblick, Stockholm",
+      "weight": "medium",
+      "certainty": "fast",
+      "visible_to": [
+        "suspect",
+        "investigator_start"
+      ]
+    },
+    {
       "id": "no_supporting_documentation",
       "description": "No itemized receipt, exception approval, or explanatory note was ever attached to this transaction in the expense system",
       "true_value": "true",
@@ -154,7 +165,7 @@
   ],
   "claim_categories": [],
   "room_objects": [
-    "a printed copy of the corporate card statement for the trip",
+    "a printed copy of the corporate card statement page for this one charge, showing its merchant name and settled amount and no other transactions",
     "a printed copy of the expense policy handbook, meal-cap section tabbed"
   ],
   "present_people": [

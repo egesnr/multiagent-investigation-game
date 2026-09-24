@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: the-box
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # One process only: sessions and turn jobs are held in this process's memory.
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GAME_MODEL
+        value: gemini-3.1-flash-lite

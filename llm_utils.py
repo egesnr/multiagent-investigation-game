@@ -26,11 +26,26 @@ def _is_retryable(exc: Exception) -> bool:
     return not any(marker in exc_text for marker in _NON_RETRYABLE_MARKERS)
 
 
-def invoke_with_retry(chain, payload: dict, attempts: int = 5, base_delay: float = 8.0):
+# 2/4/8/16 rather than 8/16/32/64. Measured on a bad free-tier spell: three
+# calls in one turn hit the retry path, and the old schedule spent 56 seconds
+# waiting on each of them — 704 seconds for a turn whose actual work was under
+# 40. These errors clear in a second or two when they clear at all, so the long
+# tail of the old schedule bought nothing and cost most of the turn.
+# (label, seconds, retries, seconds spent waiting between retries) for every
+# call since the last reset — run_turn prints it, so a slow turn says whether
+# the time went to the model, to rate-limit retries, or to our own code.
+STEP_TIMES: list[tuple[str, float, int, float]] = []
+
+
+def invoke_with_retry(chain, payload: dict, attempts: int = 5, base_delay: float = 2.0, label: str = "llm"):
     last_exc = None
+    started = time.perf_counter()
+    waited = 0.0
     for attempt in range(attempts):
         try:
-            return chain.invoke(payload)
+            result = chain.invoke(payload)
+            STEP_TIMES.append((label, time.perf_counter() - started, attempt, waited))
+            return result
         except Exception as exc:  # noqa: BLE001 - deliberately broad, re-raised if retries exhaust
             last_exc = exc
             if attempt == attempts - 1 or not _is_retryable(exc):
@@ -39,4 +54,5 @@ def invoke_with_retry(chain, payload: dict, attempts: int = 5, base_delay: float
             print(f"[retry] LLM call failed ({exc.__class__.__name__}), "
                   f"retrying in {delay:.0f}s (attempt {attempt + 2}/{attempts})...")
             time.sleep(delay)
+            waited += delay
     raise last_exc

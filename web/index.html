@@ -2601,7 +2601,9 @@
       })
       .then(function(data){
         if (data.status === 'pending'){
-          setTimeout(function(){ pollTurn(jobId, sentRow); }, 2500);
+          // Each poll is a tiny request; checking every second instead of
+          // 2.5 means a finished answer waits at most a second to be picked up.
+          setTimeout(function(){ pollTurn(jobId, sentRow); }, 1000);
           return;
         }
         handleTurnResponse(data, sentRow);

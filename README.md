@@ -1,14 +1,3 @@
----
-title: The Box
-emoji: 🔍
-colorFrom: red
-colorTo: gray
-sdk: gradio
-sdk_version: "6.26.0"
-app_file: app.py
-pinned: false
----
-
 # Multi-Agent Investigation Game
 
 An open-world suspect interview used to demonstrate and stress-test a multi-agent investigation architecture.
@@ -62,3 +51,11 @@ python server.py
 ```
 
 Then open http://127.0.0.1:8000. It's a single FastAPI process serving `web/index.html` and running the same pipeline as `main.py` underneath — a real interview, so each answer takes a few seconds to get a reply. Single session at a time by design; it's a demo of the agent architecture, not a hosted multi-user service.
+
+## Deploy (Render)
+
+`render.yaml` defines the service. On Render: **New → Blueprint**, pick this
+repo, and set `GOOGLE_API_KEY` when prompted. It runs one uvicorn process on
+`server.py` — keep it at one instance, since game sessions live in that
+process's memory. The free plan sleeps when idle, which ends any interview in
+progress.

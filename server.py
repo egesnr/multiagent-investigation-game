@@ -21,6 +21,7 @@ reintroduce anything like them, even for display purposes.
 
 import logging
 import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -253,6 +254,17 @@ def _process_turn(session_id: str, session: dict, answer: str, job_id: str) -> N
     _jobs[job_id] = {"status": "done", "result": result}
 
 
+# job_id -> [started, finished]. Measures what the engine's own timing cannot:
+# how long a finished answer sat waiting for the browser's next poll.
+_job_clock: dict[str, list] = {}
+
+
+def _timed_process_turn(session_id: str, session: dict, answer: str, job_id: str) -> None:
+    _process_turn(session_id, session, answer, job_id)
+    if job_id in _job_clock:
+        _job_clock[job_id][1] = time.perf_counter()
+
+
 @app.post("/api/turn")
 def turn(payload: TurnRequest, request: Request):
     session_id = request.cookies.get(SESSION_COOKIE)
@@ -260,8 +272,9 @@ def turn(payload: TurnRequest, request: Request):
 
     job_id = uuid.uuid4().hex
     _jobs[job_id] = {"status": "pending"}
+    _job_clock[job_id] = [time.perf_counter(), None]
     threading.Thread(
-        target=_process_turn,
+        target=_timed_process_turn,
         args=(session_id, session, payload.answer, job_id),
         daemon=True,
     ).start()
@@ -279,6 +292,14 @@ def turn_status(job_id: str):
         return {"status": "pending"}
 
     del _jobs[job_id]
+    started, finished = _job_clock.pop(job_id, [None, None])
+    if started is not None:
+        now = time.perf_counter()
+        finished = finished or now
+        logger.info(
+            "[timing] engine %.1fs + waiting for browser poll %.1fs = %.1fs until the answer left the server",
+            finished - started, now - finished, now - started,
+        )
     if job["status"] == "error":
         raise HTTPException(503, job["detail"])
     return job["result"]
