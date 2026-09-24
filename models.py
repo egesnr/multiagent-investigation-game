@@ -520,7 +520,7 @@ class SpeakerLine(BaseModel):
         description="Every specific factual claim about THIS case that your "
         "line will state or imply, each paired with where it came from, "
         "written as 'claim — source'. A source is either the id of a known "
-        "fact in square brackets, e.g. [actual_amount], or the suspect's own "
+        "fact in square brackets, or the suspect's own "
         "words in quotation marks. Nothing else is a source: 'known fact' or "
         "'the statement' names a kind of thing, not a thing, and can be "
         "written beside anything. The number, date or name in your claim "
@@ -532,8 +532,9 @@ class SpeakerLine(BaseModel):
         "specific, such as a pure question, demand, or challenge.",
     )
     line: str = Field(
-        description="The words you actually say to the suspect. Every "
-        "specific claim it makes must appear in grounding above."
+        description="The words you actually say to the suspect, as spoken "
+        "speech: contractions, short sentences, usually well under fifty "
+        "words. Every specific claim it makes must appear in grounding above."
     )
 
 
@@ -678,11 +679,10 @@ class InvestigatorMind(BaseModel):
         description="Before writing the target: every specific your target "
         "will use — an amount, a date, a document, a transaction, something "
         "the suspect saw — as 'specific — source', where the source is a fact "
-        "id in square brackets, e.g. [actual_amount], or the suspect's exact "
+        "id in square brackets, or the suspect's exact "
         "words in quotation marks. The number or name must appear in what you "
-        "cite. Something the suspect's words only suggest exists — 'other "
-        "charges' after they said they spent thousands — has no id and no "
-        "quote of its own: you may ask them about it, never name it. Empty "
+        "cite. Something the suspect's words only suggest exists has no id "
+        "and no quote of its own: you may ask them about it, never name it. Empty "
         "when the target uses no specifics.",
     )
     target: str = Field(
