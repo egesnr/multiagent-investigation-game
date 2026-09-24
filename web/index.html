@@ -372,7 +372,8 @@
      3300  second jaw swings shut, click
      3550  hauled up: the table drops out of view
      3650  fade to black...
-     4200  ...up on the room, your chair empty, frozen as an evidence still
+     4200  ...up on the room: you, cuffed at the table, the officer at your
+           side, frozen as an evidence still
      4700  stamp slams onto the photo
      5300+ the case report fades in, section by section */
   .finale{
@@ -422,6 +423,27 @@
   /* The HUD belongs to the recording, not to your eyes: hidden through the takedown */
   .finale.caught.play .finale-hud{ animation: fHudAway 2250ms steps(1) 1550ms; }
   @keyframes fHudAway{ 0%,100%{ opacity:0; } }
+
+  /* Replay: sits in the photo's corner once the sequence has finished */
+  .finale-replay{
+    position:absolute; top:calc(7% + 6px); right:10px;
+    z-index:4;
+    font-family:'Oswald', sans-serif;
+    font-size:0.62rem;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:#e7e9eb;
+    background:#000000aa;
+    border:1px solid #ffffff44;
+    border-radius:2px;
+    padding:4px 9px;
+    cursor:pointer;
+    opacity:0;
+    visibility:hidden;
+    transition: opacity 300ms ease, visibility 0s linear 300ms;
+  }
+  .finale.done .finale-replay{ opacity:1; visibility:visible; transition: opacity 300ms ease; }
+  .finale-replay:hover, .finale-replay:focus-visible{ background:#000000dd; border-color:#ffffffaa; }
 
   .f-bar{
     position:absolute; left:0; right:0; height:7%;
@@ -598,8 +620,7 @@
   .finale.caught.play .f-officer.one{
     transform-origin:760px 540px;
     animation:
-      fRushIn 400ms cubic-bezier(.3,.6,.4,1) 1050ms both,
-      fGone 1ms steps(1) 3800ms forwards;
+      fRushIn 400ms cubic-bezier(.3,.6,.4,1) 1050ms both;
   }
   @keyframes fRushIn{
     0%{ opacity:0; transform:translate(45px,-170px) scale(.62); }
@@ -616,17 +637,23 @@
     from{ opacity:0; transform:translateX(18px) scale(.94); }
     to{ opacity:1; transform:translateX(0) scale(1); }
   }
+  /* fGone/fShow are instant switches: 1ms, steps(1,jump-start). A plain
+     steps(1) can finish a hair short of progress 1 (float rounding on the
+     delay) and stay stuck on the start value. */
   @keyframes fGone{ to{ opacity:0; } }
 
-  /* Your hands: on the table until you're hauled out, then the chair is empty */
-  .finale.caught.play .f-wrists{ animation: fGone 1ms steps(1) 3800ms forwards; }
+  /* Your hands: apart on the table until the cut; in the final still they're
+     back on the table, cuffed together */
+  .finale.caught.play .f-wrists{ animation: fGone 1ms steps(1,jump-start) 3800ms forwards; }
+  .finale .f-cuffed{ opacity:0; }
+  .finale.caught.play .f-cuffed{ animation: fShow 1ms steps(1,jump-start) 3800ms forwards; }
 
   /* The grab: an arm swings in from the right, onto your shoulder */
   .finale .f-grab{ opacity:0; }
   .finale.caught.play .f-grab{
     animation:
       fGrabIn 130ms cubic-bezier(.3,0,.2,1) 1450ms forwards,
-      fGone 1ms steps(1) 3800ms forwards;
+      fGone 1ms steps(1,jump-start) 3800ms forwards;
   }
   @keyframes fGrabIn{
     from{ opacity:1; transform:translate(380px,-140px); }
@@ -781,7 +808,7 @@
   .finale.not-proven.play .n-push{
     animation:
       nPush 350ms cubic-bezier(.3,.7,.3,1) 3450ms forwards,
-      fGone 1ms steps(1) 4100ms forwards;
+      fGone 1ms steps(1,jump-start) 4100ms forwards;
   }
   @keyframes nPush{
     0%{ opacity:1; transform:translate(120px,320px) rotate(10deg); }
@@ -842,7 +869,7 @@
   .finale.policy.play .p-sheet{
     animation:
       pSlide 700ms cubic-bezier(.3,.7,.3,1) 400ms forwards,
-      fGone 1ms steps(1) 3800ms forwards;
+      fGone 1ms steps(1,jump-start) 3800ms forwards;
   }
   @keyframes pSlide{
     from{ opacity:1; transform:translate(70px,-14px) scale(.6); }
@@ -863,14 +890,14 @@
     100%{ transform:translate(660px,250px); }
   }
   .finale.policy .p-heldpen{ opacity:0; }
-  .finale.policy.play .p-heldpen{ animation: fShow 1ms steps(1) 1900ms forwards; }
+  .finale.policy.play .p-heldpen{ animation: fShow 1ms steps(1,jump-start) 1900ms forwards; }
   @keyframes fShow{ to{ opacity:1; } }
-  .finale.policy.play .p-pen{ animation: fGone 1ms steps(1) 1900ms forwards; }
+  .finale.policy.play .p-pen{ animation: fGone 1ms steps(1,jump-start) 1900ms forwards; }
   .finale.policy .p-sig{ stroke-dasharray:1; stroke-dashoffset:1; }
   .finale.policy.play .p-sig{ animation: pSign 800ms linear 2100ms forwards; }
   @keyframes pSign{ to{ stroke-dashoffset:0; } }
   .finale.policy .p-invhand{ opacity:0; }
-  .finale.policy.play .p-invhand{ animation: fShow 1ms steps(1) 2950ms forwards; }
+  .finale.policy.play .p-invhand{ animation: fShow 1ms steps(1,jump-start) 2950ms forwards; }
   .finale.policy.play .p-take{
     transform-origin:480px 250px;
     animation: pTake 400ms cubic-bezier(.5,0,.7,.4) 3050ms forwards;
@@ -939,7 +966,32 @@
 
   #camera{ transform-origin: 560px 260px; transform: scale(1) translate(0px,0px); }
 
-  .investigator{ transform-origin: 560px 300px; }
+  /* The room closes in as tension rises: the investigator leans further over
+     the table, the case file comes out and slides toward you, and the door
+     behind them opens on the officers waiting to take you. */
+  .investigator, .r-file, .r-door, .r-hall, .r-officer{
+    transform-box:view-box;
+    transition: transform 900ms cubic-bezier(.3,.7,.3,1), opacity 900ms ease;
+  }
+  .investigator{ transform-origin: 560px 440px; }
+  .room-frame[data-tier="2"] .investigator{ transform:translateY(4px) scale(1.03); }
+  .room-frame[data-tier="3"] .investigator{ transform:translateY(7px) scale(1.08); }
+  .room-frame[data-tier="4"] .investigator{ transform:translateY(11px) scale(1.14); }
+  .room-frame[data-tier="5"] .investigator{ transform:translateY(15px) scale(1.2); }
+
+  .r-file{ opacity:0; transform-origin:560px 480px; transform:translateY(-10px); }
+  .room-frame[data-tier="3"] .r-file{ opacity:1; transform:none; }
+  .room-frame[data-tier="4"] .r-file,
+  .room-frame[data-tier="5"] .r-file{ opacity:1; transform:translate(-30px,52px) scale(1.18) rotate(-4deg); }
+
+  .r-door{ transform-origin:846px 270px; }
+  .r-hall, .r-officer{ opacity:0; }
+  .room-frame[data-tier="4"] .r-door{ transform:scaleX(.72); }
+  .room-frame[data-tier="4"] .r-hall{ opacity:.55; }
+  .room-frame[data-tier="4"] .r-officer{ opacity:1; }
+  .room-frame[data-tier="5"] .r-door{ transform:scaleX(.12); }
+  .room-frame[data-tier="5"] .r-hall{ opacity:.9; }
+  .room-frame[data-tier="5"] .r-officer{ opacity:1; transform:translateX(-26px); }
 
   .lamp-shade{ transition: fill 700ms ease; }
   .vignette{ transition: opacity 900ms ease; }
@@ -1209,21 +1261,9 @@
   .t-input-row .send-btn:hover{ color:#e7e9eb; border-color:#5a616a; }
   .t-input-row .send-btn:disabled{ opacity:0.5; cursor:default; }
 
-  footer.note{
-    font-size:0.72rem;
-    color:var(--console-dim);
-    line-height:1.6;
-    max-width:74ch;
-  }
-  footer.note code{
-    background:#14161a;
-    padding:1px 5px;
-    border-radius:2px;
-    border:1px solid var(--console-border);
-  }
-
   @media (prefers-reduced-motion: reduce){
     .room-frame.shake{ animation:none; }
+    .investigator, .r-file, .r-door, .r-hall, .r-officer{ transition:none; }
     .flash.hit{ animation:none; }
     .card{ animation:none; }
     .verdict-stamp{ animation:none; opacity:1; transform:rotate(-5deg); }
@@ -1319,6 +1359,25 @@
           <rect x="0" y="370" width="960" height="230" fill="url(#floorGrad)"/>
           <line x1="0" y1="370" x2="960" y2="370" stroke="#000" stroke-opacity="0.4"/>
 
+          <!-- Door on the right wall (same place as in the CAUGHT finale): it
+               opens as tension rises, on an officer waiting in the hallway -->
+          <rect x="734" y="162" width="118" height="210" fill="#0a0c0f"/>
+          <g class="r-hall">
+            <rect x="740" y="168" width="106" height="202" fill="#c9d2d9"/>
+            <polygon points="740,370 846,370 930,470 670,470" fill="#dfe6ec" opacity="0.18"/>
+          </g>
+          <g class="r-officer" fill="#15181c">
+            <path d="M806,300 Q810,280 830,280 Q850,280 854,300 L858,375 L802,375 Z"/>
+            <circle cx="830" cy="266" r="13"/>
+            <path d="M814,258 L846,258 L848,251 Q830,242 812,251 Z"/>
+            <rect x="810" y="257" width="42" height="4" rx="2"/>
+            <rect x="826" y="252" width="8" height="4" rx="1" fill="#8a7a4a"/>
+            <!-- cuffs on the belt, catching the hallway light -->
+            <circle cx="846" cy="338" r="4" fill="none" stroke="#a3acb5" stroke-width="2"/>
+            <circle cx="853" cy="342" r="4" fill="none" stroke="#a3acb5" stroke-width="2"/>
+          </g>
+          <rect class="r-door" x="740" y="168" width="106" height="202" fill="#1f242a" stroke="#101316" stroke-width="3"/>
+
           <line x1="560" y1="0" x2="560" y2="118" stroke="#0c0e11" stroke-width="3"/>
           <polygon class="lamp-glow" id="lampGlowEl" points="440,420 680,420 560,120" fill="url(#lampGlow)" opacity="0.55"/>
           <path class="lamp-shade" d="M520,118 L600,118 L622,150 L498,150 Z" fill="var(--lamp-shade-color, #f4c983)"/>
@@ -1335,6 +1394,14 @@
               <rect x="480" y="450" width="42" height="14" rx="5" fill="var(--hands)"/>
               <rect x="598" y="450" width="42" height="14" rx="5" fill="var(--hands)"/>
             </g>
+          </g>
+
+          <!-- the case file: out on the table at tier 3, pushed at you from tier 4 -->
+          <g class="r-file">
+            <polygon points="516,475 616,475 620,497 512,497" fill="#d9cfbd"/>
+            <polygon points="498,474 638,474 644,501 492,501" fill="#b89a64"/>
+            <polygon points="500,474 548,474 551,469 503,469" fill="#a88a55"/>
+            <line x1="510" y1="488" x2="586" y2="488" stroke="#7d6540" stroke-width="3"/>
           </g>
         </g>
 
@@ -1391,10 +1458,6 @@
       </div>
     </div>
   </div>
-
-  <footer class="note">
-    This room is driven entirely by the real pipeline: <code>state.score</code> / <code>state.tier</code> set the lamp, camera zoom and vignette; the top-right label shows the Strategist's real free-form <code>target</code> for the next question; each claim in <code>case_log</code> with nonzero <code>evidentiary_impact</code> pins a card and flags your answer. Nothing here is scripted &mdash; every line is a real LLM call, which is why an answer takes a few seconds to get a reply.
-  </footer>
 
   </section>
 
@@ -1537,6 +1600,32 @@
             <path d="M562,524 Q530,508 498,516 Q482,524 490,540 Q502,556 532,560 Q552,562 560,548 Z" fill="#5a4a3e"/>
             <path d="M404,524 Q432,512 460,518" fill="none" stroke="#7a6454" stroke-width="3"/>
             <path d="M556,524 Q528,512 500,518" fill="none" stroke="#7a6454" stroke-width="3"/>
+          </g>
+          <!-- ...and after the cut: the same hands, pulled together and cuffed -->
+          <g class="f-cuffed">
+            <path d="M230,600 L408,530 Q428,522 440,540 L452,562 L330,600 Z" fill="#1b1f24"/>
+            <path d="M730,600 L552,530 Q532,522 520,540 L508,562 L630,600 Z" fill="#1b1f24"/>
+            <path d="M434,524 Q466,508 498,516 Q514,524 506,540 Q494,556 464,560 Q444,562 436,548 Z" fill="#5a4a3e"/>
+            <path d="M440,524 Q468,512 496,518" fill="none" stroke="#7a6454" stroke-width="3"/>
+            <path d="M526,524 Q494,508 462,516 Q446,524 454,540 Q466,556 496,560 Q516,562 524,548 Z" fill="#5a4a3e" stroke="#3e3229" stroke-width="1.5"/>
+            <path d="M520,524 Q492,512 464,518" fill="none" stroke="#7a6454" stroke-width="3"/>
+            <!-- chain between the cuffs, slack under the wrists -->
+            <g fill="none" stroke="url(#fhSteel)" stroke-width="2.5">
+              <ellipse cx="458" cy="566" rx="6" ry="3.5"/>
+              <ellipse cx="470" cy="569" rx="6" ry="2"/>
+              <ellipse cx="482" cy="570" rx="6" ry="3.5"/>
+              <ellipse cx="494" cy="569" rx="6" ry="2"/>
+              <ellipse cx="506" cy="566" rx="6" ry="3.5"/>
+            </g>
+            <!-- a steel band round each wrist, lit from the lamp above -->
+            <g transform="translate(438 541) rotate(-22)">
+              <rect x="-7" y="-22" width="14" height="44" rx="5" fill="url(#fhSteel)" stroke="#2f353b" stroke-width="1.5"/>
+              <rect x="-6" y="12" width="12" height="12" rx="2" fill="#8a929b" stroke="#2f353b" stroke-width="1.5"/>
+            </g>
+            <g transform="translate(522 541) rotate(22)">
+              <rect x="-7" y="-22" width="14" height="44" rx="5" fill="url(#fhSteel)" stroke="#2f353b" stroke-width="1.5"/>
+              <rect x="-6" y="12" width="12" height="12" rx="2" fill="#8a929b" stroke="#2f353b" stroke-width="1.5"/>
+            </g>
           </g>
           </g>
           </g></g></g>
@@ -1949,6 +2038,8 @@
         <div class="finale-caption"></div>
       </div>
 
+      <button class="finale-replay" id="replayBtn" type="button">&#8634; Replay</button>
+
       <div class="verdict-stamp" id="verdictStamp">&mdash;</div>
       <div class="score-readout reveal" style="--i:0">Final case score: <b id="finalScore">0</b> / <span id="finalThreshold">80</span></div>
 
@@ -2285,12 +2376,15 @@
   }
 
   var finaleTimers = [];
+  var replayBtn = document.getElementById('replayBtn');
+  var lastFinale = null;
   function playFinale(outcome, v){
+    lastFinale = { outcome: outcome, v: v };
     var card = document.getElementById('resolutionScreen');
     finaleTimers.forEach(clearTimeout);
     finaleTimers = [];
     document.querySelectorAll('.finale').forEach(function(f){
-      f.classList.remove('play');
+      f.classList.remove('play', 'done');
       f.hidden = true;
     });
     card.classList.remove('has-finale');
@@ -2304,8 +2398,11 @@
     card.style.setProperty('--stamp-at', v.finale.stampAt + 'ms');
     card.style.setProperty('--reveal-at', v.finale.revealAt + 'ms');
     finale.querySelector('.finale-caption').textContent = v.finale.caption;
+    finale.appendChild(replayBtn);
     void finale.offsetWidth;
     finale.classList.add('play');
+    finaleTimers.push(setTimeout(function(){ finale.classList.add('done'); },
+                                 reducedMotion ? 0 : v.finale.revealAt));
     if (reducedMotion) return;
     v.finale.cues.forEach(function(cue){
       finaleTimers.push(setTimeout(cue.play, cue.at));
@@ -2628,10 +2725,9 @@
     stamp.style.setProperty('--verdict-color', v.color);
     stamp.textContent = v.label;
     stamp.classList.toggle('long', v.label.length > 12);
-    stamp.style.animation = 'none'; void stamp.offsetWidth; stamp.style.animation = '';
+    restartStamp();
 
     var card = document.getElementById('resolutionScreen');
-    card.classList.remove('impact'); void card.offsetWidth; card.classList.add('impact');
     card.querySelectorAll('.reveal').forEach(function(el){
       el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
     });
@@ -2643,6 +2739,22 @@
       lights.classList.add('on');
     }
   }
+
+  function restartStamp(){
+    var stamp = document.getElementById('verdictStamp');
+    stamp.style.animation = 'none'; void stamp.offsetWidth; stamp.style.animation = '';
+    var card = document.getElementById('resolutionScreen');
+    card.classList.remove('impact'); void card.offsetWidth; card.classList.add('impact');
+  }
+
+  // Replay the closing sequence (and the stamp landing on it). The case
+  // report below is already read, so it stays put.
+  replayBtn.addEventListener('click', function(){
+    if (!lastFinale) return;
+    ensureAudio();
+    playFinale(lastFinale.outcome, lastFinale.v);
+    restartStamp();
+  });
 
   // ---------- Screens ----------
   var briefing = document.getElementById('briefingScreen');
@@ -2757,8 +2869,8 @@
 
   // Dev preview: /?ending=CAUGHT (or NOT_PROVEN, POLICY_VIOLATION_ONLY) jumps
   // straight to that resolution screen with placeholder text, so an ending can
-  // be checked without playing a full interview. Click the photo to replay it
-  // (the click also unlocks sound, which browsers block until a user gesture).
+  // be checked without playing a full interview. Use Replay to watch it again
+  // with sound (browsers block audio until a user gesture).
   var previewEnding = new URLSearchParams(location.search).get('ending');
   if (previewEnding && VERDICT_LOOKS[previewEnding]){
     // Placeholder content, clearly marked — only the layout is real here.
@@ -2779,12 +2891,6 @@
     };
     populateResolution(previewRes);
     showScreen('resolution');
-    document.querySelectorAll('.finale').forEach(function(f){
-      f.addEventListener('click', function(){
-        ensureAudio();
-        populateResolution(previewRes);
-      });
-    });
   }
 })();
 </script>
