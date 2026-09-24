@@ -17,6 +17,11 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai.chat_models import (
+    GoogleAPIError,
+    GoogleModelNotFoundError,
+    GoogleRateLimitError,
+)
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
@@ -56,11 +61,58 @@ MODEL_NAME = os.environ.get("GAME_MODEL", "gemini-3.1-flash-lite")
 MAX_OUTPUT_TOKENS = 2048
 
 
+# Tried in order when the main model fails outright: its daily free quota runs
+# out (429), Google is overloaded (503), or the name stops existing. Each has
+# its own quota, so a game keeps going instead of ending on an error screen.
+FALLBACK_MODELS = [
+    m.strip() for m in os.environ.get(
+        "GAME_FALLBACK_MODELS",
+        "gemini-3.5-flash-lite,gemini-3-flash-preview,gemini-2.5-flash-lite",
+    ).split(",") if m.strip() and m.strip() != MODEL_NAME
+]
+
+# The fallbacks think before answering and that thinking counts against the
+# output cap: at 2048 their structured answers came back cut off mid-JSON.
+FALLBACK_MAX_OUTPUT_TOKENS = 8192
+
+
+class _BackupModel(ChatGoogleGenerativeAI):
+    """A fallback that says so when it is used. A listener attached with
+    with_listeners was dropped once with_structured_output wrapped the model,
+    so the switch happened silently; announcing from inside the call cannot
+    be lost that way."""
+
+    def _generate(self, *args, **kwargs):
+        print(f"  [fallback] main model failed, using {self.model}")
+        return super()._generate(*args, **kwargs)
+
+
 def get_llm(temperature: float = 0.3, max_output_tokens: int = MAX_OUTPUT_TOKENS):
-    return ChatGoogleGenerativeAI(
+    if not FALLBACK_MODELS:
+        return ChatGoogleGenerativeAI(
+            model=MODEL_NAME,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+        )
+    # One retry, not the library's six: with backups waiting, six retries
+    # spent ~35s on every call learning that a daily quota was still gone.
+    main = ChatGoogleGenerativeAI(
         model=MODEL_NAME,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
+        max_retries=1,
+    )
+    backups = [
+        _BackupModel(
+            model=m,
+            temperature=temperature,
+            max_output_tokens=max(max_output_tokens, FALLBACK_MAX_OUTPUT_TOKENS),
+        )
+        for m in FALLBACK_MODELS
+    ]
+    return main.with_fallbacks(
+        backups,
+        exceptions_to_handle=(GoogleRateLimitError, GoogleAPIError, GoogleModelNotFoundError),
     )
 
 

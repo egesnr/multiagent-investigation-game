@@ -14,12 +14,11 @@ because the score fell short of the threshold, since the model had no way to
 know its own draft outcome would be overridden.
 """
 
-import os
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
+import agents
 from llm_utils import invoke_with_retry
 from models import (
     FindingBasis,
@@ -55,7 +54,6 @@ class NarrativeDraft(BaseModel):
 
 
 load_dotenv()
-MODEL_NAME = os.environ.get("GAME_MODEL", "gemini-3.1-flash-lite")
 
 
 IMPACT_POINTS = {
@@ -68,7 +66,10 @@ IMPACT_POINTS = {
 
 
 def get_llm(temperature: float = 0.2):
-    return ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=temperature)
+    # Same model and fallback chain as the interview, so the verdict cannot be
+    # the one step left to fail on a quota or an overload. No tight cap here:
+    # the narrative is the longest thing the game writes.
+    return agents.get_llm(temperature, max_output_tokens=agents.FALLBACK_MAX_OUTPUT_TOKENS)
 
 
 verification_prompt = ChatPromptTemplate.from_messages([
