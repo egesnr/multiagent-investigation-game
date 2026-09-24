@@ -156,6 +156,15 @@ class EvidenceRelation(str, Enum):
 class EvidenceAssessment(BaseModel):
     claim: str = Field(...)
     claim_proposition: str = Field(...)
+    earlier_answer: str = Field(
+        default="none",
+        description="Before looking at the records: read the suspect's EARLIER "
+        "answers (not the one this claim comes from) and quote the one this "
+        "claim sits worst with, with its turn number — or 'none'. The "
+        "suspect's own earlier words are evidence like any record: if one of "
+        "them is what bears on this claim, it is the evidence proposition and "
+        "the basis is story_history."
+    )
     evidence_proposition: str = Field(...)
     could_both_hold: str = Field(
         description="Before choosing a relation: describe any situation in "
@@ -386,12 +395,6 @@ class SuspectNarrative(BaseModel):
         description="3-5 sentences: the suspect's account of what happened, "
         "as they have told it SO FAR across the whole interview, in their "
         "own logic — not whether the investigator believes it."
-    )
-    self_contradictions: list[SelfContradiction] = Field(
-        default_factory=list,
-        description="Only genuinely new tensions surfaced by THIS turn's "
-        "answer against something said earlier. Do not re-list a tension "
-        "already identified in a previous turn.",
     )
     unfalsifiable_account: Optional[SelfContradiction] = Field(
         default=None,
@@ -628,14 +631,6 @@ class InvestigatorMind(BaseModel):
     )
 
     # --- 3. findings that score ---
-    self_contradictions: list[SelfContradiction] = Field(
-        default_factory=list,
-        description="Only genuinely new tensions surfaced by THIS turn's answer "
-        "against something the suspect said earlier. Two of THEIR statements, "
-        "never their statement against a record — the Checker owns that "
-        "comparison and has already made it. Do not re-list a tension "
-        "identified in a previous turn.",
-    )
     unfalsifiable_account: Optional[SelfContradiction] = Field(
         default=None,
         description="Set ONCE, ever, when the account has become one where "

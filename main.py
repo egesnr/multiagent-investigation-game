@@ -167,7 +167,11 @@ def run_turn(
 
     analysis_answer = gate.analysis_text.strip() or player_answer
 
-    state.transcript.append({"role": "investigator", "text": question})
+    # The Speaker already recorded this question when it asked it; only the
+    # opening question arrives here unrecorded. Appending unconditionally put
+    # every question in the transcript twice.
+    if state.transcript[-1:] != [{"role": "investigator", "text": question}]:
+        state.transcript.append({"role": "investigator", "text": question})
     state.transcript.append({"role": "suspect", "text": analysis_answer})
     state.question_count += 1
 
@@ -259,17 +263,14 @@ def run_turn(
     # next move. It runs after the Checker so the head choosing the next
     # question can see what this answer just produced.
     #
-    # Self-contradiction detection lives here rather than in a starved call of
-    # its own. Separating it — giving it the suspect's words and nothing else —
-    # did stop it comparing him to the records, and also stopped it finding
-    # anything: established findings went 16 to 0 on the same answers. Holding
-    # the whole interview is what makes it able to find a walked-back denial.
+    # Self-contradiction is not judged here. It belongs to the Checker, which
+    # sees every earlier answer when it checks a new claim; two places able to
+    # find the same tension were two chances to score it.
     mind, war_room = run_investigator_mind(
         state, findings_this_turn=results, return_debug=True
     )
     narrative = SuspectNarrative(
         summary=mind.account_summary,
-        self_contradictions=mind.self_contradictions,
         unfalsifiable_account=mind.unfalsifiable_account,
         stale_thread=mind.stale_thread,
     )
@@ -286,36 +287,7 @@ def run_turn(
         print(f"  [inference] {item}")
     print(f"  [war room] innocent_reading_won={mind.innocent_reading_won}")
 
-    # Self-contradictions are a different kind of finding from everything the
-    # Checker produces: the narrative synthesis already did the verification
-    # (it compared two of the suspect's own statements directly against the
-    # transcript), so this is NOT sent through the Checker to be re-verified
-    # against evidence — that would mean asking "is it true that the suspect
-    # contradicted themselves" as if it were still an open question. Built
-    # directly instead, with basis/status/claim_type forced by construction
-    # rather than re-guessed.
-    for contradiction in narrative.self_contradictions:
-        results.append(CheckResult(
-            # Without this the finding is keyed on its own prose, and the same
-            # tension re-described next turn scores all over again — measured
-            # at seven scorings of one contradiction, 84 of a 132-point run.
-            subject=contradiction.subject,
-            quoted_evidence=contradiction.claim_text,
-            rationale=(
-                f"Earlier: \"{contradiction.earlier_statement}\" — "
-                f"Later: \"{contradiction.later_statement}\""
-            ),
-            basis=FindingBasis.STORY_HISTORY,
-            investigator_visible=True,
-            claim_type=ClaimType.CONTRADICTION,
-            verification_status=ClaimStatus.CONTRADICTED,
-            strategic_value="high",
-            evidentiary_impact=contradiction.evidentiary_impact,
-            risk_profile=RiskProfile(story_contradiction=True),
-        ))
-
-    # An account where nothing can be checked is a finding in its own right,
-    # scored the same way a self-contradiction is. Without it, a suspect who
+    # An account where nothing can be checked is a finding in its own right. Without it, a suspect who
     # answers every question with something unverifiable ("can't recall",
     # "it was standard", "it's on the statement") banks a flat few points per
     # turn and the pattern itself — the thing an investigator would actually
@@ -410,13 +382,7 @@ def run_turn(
         f"REALITY GATE:\n{json.dumps(gate.model_dump(), indent=2, ensure_ascii=False)}\n\n"
         f"ANALYZED ANSWER:\n{analysis_answer}\n\n"
         f"SUSPECT NARRATIVE:\n{narrative.summary}\n"
-        f"SELF-CONTRADICTIONS FOUND THIS TURN:\n"
-        + ("\n".join(
-            f"- {c.claim_text} [impact={c.evidentiary_impact.value}]\n"
-            f"  earlier: \"{c.earlier_statement}\"\n  later: \"{c.later_statement}\""
-            for c in narrative.self_contradictions
-          ) or "- None")
-        + f"\nSTALE THREAD: {narrative.stale_thread or 'None'}\n\n"
+        f"STALE THREAD: {narrative.stale_thread or 'None'}\n\n"
         f"EXTRACTED CLAIMS:\n"
         + _format_extracted_claims(extracted.claims)
         + f"\n\nNOVEL CLAIMS SENT TO CHECKER ({len(checkable_claims)}):\n"

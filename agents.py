@@ -309,6 +309,7 @@ Do not broaden, reinterpret, or strengthen the claim.
 3. EVIDENCE PROPOSITION
 
 Identify the most relevant available evidence and state precisely what that evidence establishes.
+The suspect's own earlier answers count as evidence here, alongside the records.
 
 Do not broaden what the evidence proves.
 
@@ -400,6 +401,11 @@ POLICY:
 
 INVESTIGATOR-VISIBLE CASE LOG:
 {case_log}
+
+EVERY ANSWER THE SUSPECT HAS GIVEN, numbered. The last one is the answer these
+claims come from; the others are earlier answers, and are evidence like any
+record when a claim sits against one of them:
+{suspect_words}
 
 RECENT TRANSCRIPT:
 {transcript}
@@ -605,6 +611,12 @@ def run_checker(
     policy = "\n".join(f"- {p}" for p in case.policy_rules) or "- None"
     visible_case_log = case_log.investigator_view() if case_log else {}
     recent_transcript = (transcript or [])[-12:]
+    # All of them, not the recent window: a claim can sit against something
+    # said six answers ago, and the window cut that off.
+    suspect_words = "\n".join(
+        f"{i + 1}. {t['text']}"
+        for i, t in enumerate(t for t in (transcript or []) if t["role"] == "suspect")
+    ) or "- Nothing said yet"
 
     evidence_chain = (
         evidence_checker_prompt
@@ -614,6 +626,7 @@ def run_checker(
         "known_facts": known_facts,
         "policy": policy,
         "case_log": visible_case_log,
+        "suspect_words": suspect_words,
         "transcript": recent_transcript,
         "claims": claims,
     })
@@ -748,6 +761,13 @@ def _full_context(state: GameState, findings_this_turn=None) -> dict:
         "score": state.score,
         "threshold": state.case.arrest_threshold,
         "last_turn_delta": state.last_turn_delta,
+        "prior_contradictions": list(state.case_log.contradictions) or ["- None yet"],
+        "already_flagged_unfalsifiable": (
+            "YES — already flagged. Leave unfalsifiable_account null this turn "
+            "and every turn from now on."
+            if state.unfalsifiable_flagged else
+            "No — not yet flagged."
+        ),
         "last_turn_usefulness": state.last_turn_usefulness,
     }
 
@@ -932,17 +952,10 @@ about how such things normally work is legitimate and belongs here. Stating
 that a particular record exists or says something is not, unless it is in the
 facts.
 
-5 — THE SUSPECT AGAINST THEMSELVES
-Only the suspect's own words can contradict each other. Two of THEIR statements,
-never their statement against a record — that comparison belongs to the Checker,
-it has already been made this turn, and making it again here scores the same
-disagreement twice under a different name. If your reason for calling something
-a contradiction mentions a fact, a record or a document, it is not one.
-Flag only real tension: a walked-back denial, a detail that quietly changed, a
-claim that only made sense given something since taken back. Not an unproven
-claim, not ordinary added detail, not an inability to recall, name or produce
-something — that pattern has one home, unfalsifiable_account, and belongs
-nowhere else.
+5 — THE SHAPE OF THE ACCOUNT
+Whether a claim contradicts the records or the suspect's own earlier answers is
+the Checker's judgment, already made this turn — its findings are above. Use
+them; do not re-judge them.
 Set unfalsifiable_account once and only once, when nothing in the account can be
 checked by anyone. Someone who simply refuses to answer is stonewalling and is
 handled elsewhere; this is for one who answers freely and says nothing checkable.
@@ -1065,13 +1078,6 @@ def run_investigator_mind(
     context = _full_context(state, findings_this_turn)
     context["skeptic"] = skeptic.model_dump()
     context["alternative"] = alternative.model_dump()
-    context["prior_contradictions"] = list(state.case_log.contradictions) or ["- None yet"]
-    context["already_flagged_unfalsifiable"] = (
-        "YES — already flagged. Leave unfalsifiable_account null this turn "
-        "and every turn from now on."
-        if state.unfalsifiable_flagged else
-        "No — not yet flagged."
-    )
     chain = mind_prompt | get_llm(0.3).with_structured_output(InvestigatorMind)
     mind = invoke_with_retry(chain, context)
 
