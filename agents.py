@@ -12,6 +12,7 @@ Knowledge boundary:
 """
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -104,7 +105,7 @@ Recent transcript: {transcript}"""
 
 def run_reality_gate(state: GameState, answer: str) -> RealityGateResult:
     chain = reality_gate_prompt | get_llm(0).with_structured_output(RealityGateResult)
-    return invoke_with_retry(chain, {
+    return invoke_with_retry(chain, label="reality gate", payload={
         "present_people": state.case.present_people,
         "room_objects": state.case.room_objects or ["none authored"],
         "known_facts": _known_facts(state),
@@ -251,7 +252,7 @@ def run_extractor(
     transcript: list[dict] | None = None,
 ) -> ExtractedClaims:
     chain = extractor_prompt | get_llm(0).with_structured_output(ExtractedClaims)
-    return invoke_with_retry(chain, {
+    return invoke_with_retry(chain, label="extractor", payload={
         "question": question,
         "answer": answer,
         "known_claims": known_claims or ["- None yet"],
@@ -622,7 +623,7 @@ def run_checker(
         evidence_checker_prompt
         | get_llm(0).with_structured_output(EvidenceAssessmentList)
     )
-    evidence_output = invoke_with_retry(evidence_chain, {
+    evidence_output = invoke_with_retry(evidence_chain, label="checker: evidence", payload={
         "known_facts": known_facts,
         "policy": policy,
         "case_log": visible_case_log,
@@ -664,7 +665,7 @@ def run_checker(
         significance_checker_prompt
         | get_llm(0).with_structured_output(InvestigativeSignificanceList)
     )
-    significance_output = invoke_with_retry(significance_chain, {
+    significance_output = invoke_with_retry(significance_chain, label="checker: significance", payload={
         "known_facts": known_facts,
         "policy": policy,
         "case_log": visible_case_log,
@@ -881,12 +882,12 @@ say so plainly."""
 
 def run_skeptic(state: GameState, findings_this_turn=None) -> SkepticView:
     chain = skeptic_prompt | get_llm(0.2).with_structured_output(SkepticView)
-    return invoke_with_retry(chain, _full_context(state, findings_this_turn))
+    return invoke_with_retry(chain, _full_context(state, findings_this_turn), label="skeptic")
 
 
 def run_alternative_hypothesis(state: GameState, findings_this_turn=None) -> AlternativeView:
     chain = alternative_prompt | get_llm(0.2).with_structured_output(AlternativeView)
-    return invoke_with_retry(chain, _full_context(state, findings_this_turn))
+    return invoke_with_retry(chain, _full_context(state, findings_this_turn), label="alternative")
 
 
 mind_prompt = ChatPromptTemplate.from_messages([
@@ -1072,14 +1073,20 @@ def run_investigator_mind(
     one schema they become one train of thought that already knows which side
     it prefers.
     """
-    skeptic = run_skeptic(state, findings_this_turn)
-    alternative = run_alternative_hypothesis(state, findings_this_turn)
+    # Run side by side: neither reads the other's answer — that independence
+    # is the point of the war room — so waiting for one before starting the
+    # other only added its whole latency to every turn.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        skeptic_job = pool.submit(run_skeptic, state, findings_this_turn)
+        alternative_job = pool.submit(run_alternative_hypothesis, state, findings_this_turn)
+        skeptic = skeptic_job.result()
+        alternative = alternative_job.result()
 
     context = _full_context(state, findings_this_turn)
     context["skeptic"] = skeptic.model_dump()
     context["alternative"] = alternative.model_dump()
     chain = mind_prompt | get_llm(0.3).with_structured_output(InvestigatorMind)
-    mind = invoke_with_retry(chain, context)
+    mind = invoke_with_retry(chain, context, label="lead")
 
     if return_debug:
         return mind, WarRoomBundle(skeptic=skeptic, alternative=alternative)
@@ -1137,7 +1144,10 @@ work the way you assume.
 
 This is enforced by the grounding list you fill in before writing your line.
 For every specific claim about this case your line will make, you must name
-where it came from — a known fact, the case log, or the suspect's own words.
+where it came from: the id of a known fact in square brackets, or the suspect's
+exact words in quotation marks. "Known fact" on its own is not a source — it
+fits anything, which is how a charge that exists nowhere once got read out as
+evidence. If no id and no quote carries the claim, you do not have it.
 Write that list first and honestly. If you find yourself unable to source
 something, that is the system working: drop the claim or soften it to a
 general statement, then write the line. Do not write the line first and
@@ -1202,13 +1212,15 @@ def run_speaker(
     narrative_summary: str = "No account given yet.",
     return_debug: bool = False,
 ):
+    # The id is shown so grounding can cite it: a source has to be something
+    # that could be looked up, not the word "fact".
     known_facts = "\n".join(
-        f"- {f.description}: {f.true_value}"
+        f"- [{f.id}] {f.description}: {f.true_value}"
         for f in case.visible_facts("investigator_start")
     ) or "- None"
 
     chain = speaker_prompt | get_llm(0.5).with_structured_output(SpeakerLine)
-    spoken = invoke_with_retry(chain, {
+    spoken = invoke_with_retry(chain, label="speaker", payload={
         "persona": case.persona,
         "target": move.target,
         "score": score,

@@ -519,9 +519,12 @@ class SpeakerLine(BaseModel):
         default_factory=list,
         description="Every specific factual claim about THIS case that your "
         "line will state or imply, each paired with where it came from, "
-        "written as 'claim — source'. A source is one of: a known fact you "
-        "were given, an entry in the visible case log, or the suspect's own "
-        "words in the transcript (quote the phrase). If you cannot name a "
+        "written as 'claim — source'. A source is either the id of a known "
+        "fact in square brackets, e.g. [actual_amount], or the suspect's own "
+        "words in quotation marks. Nothing else is a source: 'known fact' or "
+        "'the statement' names a kind of thing, not a thing, and can be "
+        "written beside anything. The number, date or name in your claim "
+        "must appear in the fact you cite. If you cannot name a "
         "real source for something, you may not say it — either drop it, or "
         "rewrite it as a general statement about how things usually work "
         "('receipts are normally handed over' rather than 'you were handed a "
@@ -669,6 +672,18 @@ class InvestigatorMind(BaseModel):
         "clothes. Judge by meaning: a question from turn 1 is exactly as "
         "repeated as one from last turn. If it repeats, pick a different "
         "thread and say so here."
+    )
+    target_grounding: list[str] = Field(
+        default_factory=list,
+        description="Before writing the target: every specific your target "
+        "will use — an amount, a date, a document, a transaction, something "
+        "the suspect saw — as 'specific — source', where the source is a fact "
+        "id in square brackets, e.g. [actual_amount], or the suspect's exact "
+        "words in quotation marks. The number or name must appear in what you "
+        "cite. Something the suspect's words only suggest exists — 'other "
+        "charges' after they said they spent thousands — has no id and no "
+        "quote of its own: you may ask them about it, never name it. Empty "
+        "when the target uses no specifics.",
     )
     target: str = Field(
         description="Free-form thread to pursue next, carrying both what you "

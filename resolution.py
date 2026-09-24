@@ -230,7 +230,7 @@ def run_resolution(state: GameState) -> ResolutionReport:
     verification_chain = (
         verification_prompt | get_llm(0.2).with_structured_output(VerificationDraft)
     )
-    verification_draft = invoke_with_retry(verification_chain, {
+    verification_draft = invoke_with_retry(verification_chain, label="resolution: verify", payload={
         "facts": facts,
         "policy": policy,
         "already_established": already_established_text,
@@ -327,7 +327,7 @@ def run_resolution(state: GameState) -> ResolutionReport:
         outcome = FinalOutcome.NOT_PROVEN
 
     narrative_chain = narrative_prompt | get_llm(0.3).with_structured_output(NarrativeDraft)
-    narrative = invoke_with_retry(narrative_chain, {
+    narrative = invoke_with_retry(narrative_chain, label="resolution: narrative", payload={
         "outcome": outcome.value,
         "final_score": final_score,
         "threshold": state.case.arrest_threshold,

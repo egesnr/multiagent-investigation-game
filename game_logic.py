@@ -468,7 +468,22 @@ def dedupe_results(results: list[CheckResult]) -> list[CheckResult]:
     return output
 
 
+def locked_score(state: GameState) -> int:
+    """The part of the score nothing can take back off.
+
+    Only two things are ever returned: provisional suspicion for an excuse
+    the records later confirm (resolution), and a dodged fact the suspect
+    answers later (release_dodged_fact). Resolution never subtracts anything
+    else, and its verification delta is never negative.
+    """
+    refundable = sum(state.provisional_findings.values()) + sum(state.dodge_fact_points.values())
+    return state.score - refundable
+
+
 def case_decisively_resolved(state: GameState) -> bool:
-    # Do not end immediately at the arrest threshold; the interview still has value.
-    # Only an overwhelmingly strong case can end early, and never before three answers.
-    return state.score >= state.case.arrest_threshold + 30 and state.question_count >= 3
+    # Ends when the arrest is already certain: the points that can never come
+    # back off have reached the threshold, so no answer left in the interview
+    # can change the verdict. The old rule (score >= threshold + 30) was a
+    # guess at the same thing — it let a case sit settled for turns, and could
+    # end one still resting on refundable points. Never before three answers.
+    return locked_score(state) >= state.case.arrest_threshold and state.question_count >= 3

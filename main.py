@@ -3,7 +3,9 @@ CLI orchestration for the multi-agent investigation game.
 """
 
 import json
+import time
 
+import llm_utils
 from models import (
     CaseFile,
     CheckResult,
@@ -141,11 +143,33 @@ The investigator has a limited number of questions and will try to determine wha
 """
 
 
+def _print_timing(started: float) -> None:
+    """Where this turn's time went: each model call, retry waits, and the rest
+    (our own code: scoring, formatting, logging)."""
+    total = time.perf_counter() - started
+    llm = sum(t for _, t, _, _ in llm_utils.STEP_TIMES)
+    waited = sum(w for _, _, _, w in llm_utils.STEP_TIMES)
+    print("\n--- TIMING ---")
+    for label, secs, retries, wait in llm_utils.STEP_TIMES:
+        extra = f"  ({retries} retries, {wait:.0f}s waiting)" if retries else ""
+        print(f"  {label:<24}{secs:6.1f}s{extra}")
+    print(f"  {'model calls (summed)':<24}{llm:6.1f}s  ({len(llm_utils.STEP_TIMES)} calls, {waited:.0f}s of it retry waits)")
+    # Calls that run side by side overlap, so the summed call time can exceed
+    # the wall clock; the difference is time the parallel calls saved.
+    if total >= llm:
+        print(f"  {'our code':<24}{total - llm:6.1f}s")
+    else:
+        print(f"  {'saved by parallel calls':<24}{llm - total:6.1f}s")
+    print(f"  {'TURN TOTAL':<24}{total:6.1f}s\n--------------")
+
+
 def run_turn(
     state: GameState,
     question: str,
     player_answer: str,
 ) -> tuple[GameState, str]:
+    turn_started = time.perf_counter()
+    llm_utils.STEP_TIMES.clear()
     state.last_world_notice = None
     gate = run_reality_gate(state, player_answer)
 
@@ -365,11 +389,15 @@ def run_turn(
             "against the available evidence."
         )
         state.transcript.append({"role": "investigator", "text": closing})
+        print(f"\n  [INVESTIGATOR SAYS] {closing}\n")
+        _print_timing(turn_started)
         return state, closing
 
     if case_decisively_resolved(state):
         closing = "I have enough for now. This interview is concluded."
         state.transcript.append({"role": "investigator", "text": closing})
+        print(f"\n  [INVESTIGATOR SAYS] {closing}\n")
+        _print_timing(turn_started)
         return state, closing
 
     move = mind
@@ -413,6 +441,8 @@ def run_turn(
     state.last_move = move.target
     state.move_history.append(state.last_move)
 
+    for item in move.target_grounding:
+        print(f"  [target grounding] {item}")
     print(
         f"  [strategy] target={move.target} | "
         f"remaining={state.max_questions - state.question_count}"
@@ -431,6 +461,7 @@ def run_turn(
     )
     state.grounding_history.append(list(speaker_grounding))
     state.transcript.append({"role": "investigator", "text": line})
+    print(f"\n  [INVESTIGATOR SAYS] {line}\n")
 
     _append_debug_log(
         f"SPEAKER OUTPUT AFTER TURN {state.question_count}:\n{line}\n\n"
@@ -444,6 +475,7 @@ def run_turn(
         + "\n" + "=" * 60
     )
 
+    _print_timing(turn_started)
     return state, line
 
 
