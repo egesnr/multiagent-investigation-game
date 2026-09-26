@@ -190,6 +190,7 @@ def run_turn(
         return state, question
 
     analysis_answer = gate.analysis_text.strip() or player_answer
+    print(f"\n  [SUSPECT SAYS] {player_answer}\n")
 
     # The Speaker already recorded this question when it asked it; only the
     # opening question arrives here unrecorded. Appending unconditionally put

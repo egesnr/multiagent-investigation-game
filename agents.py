@@ -12,6 +12,7 @@ Knowledge boundary:
 """
 
 import os
+from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
@@ -87,6 +88,10 @@ class _BackupModel(ChatGoogleGenerativeAI):
         return super()._generate(*args, **kwargs)
 
 
+# Built once per setting and reused: every call used to construct the main
+# model and all three backups from scratch — 1.2s a turn locally, 6-12s on
+# Render's free CPU, logged there as "our code".
+@lru_cache(maxsize=None)
 def get_llm(temperature: float = 0.3, max_output_tokens: int = MAX_OUTPUT_TOKENS):
     if not FALLBACK_MODELS:
         return ChatGoogleGenerativeAI(
