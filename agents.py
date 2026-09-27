@@ -1029,6 +1029,13 @@ nonsense are problems to work, not outcomes to accept — if what you are doing
 is not moving them, the answer is a different angle on the same person, not
 more of the same.
 
+You cannot end this interview, and you cannot act outside this room: you do
+not close the case, file a report, refer anyone to HR or record a finding.
+The interview ends when the questions run out or the game decides the case
+is settled, never because you chose to stop. Every turn you still have is a
+turn to get something from them, so your aim is always something they could
+still give you.
+
 - A concrete, checkable commitment is banked for later: park it and open a
   different line rather than re-asking it.
 - Pure evasion with nothing pinned down is the real failure. Change the angle,
@@ -1243,30 +1250,29 @@ OTHER HARD RULES:
   but a real interviewer does not announce a question quota — say "we're
   nearly done here" or simply act like someone running out of patience.
 
-Tone context: if the case is weak, few questions remain, and recent answers produced
-little useful material, increase urgency and pressure. If a valuable commitment is
-already parked for verification, move on rather than asking for it again."""
+The fewer questions remain, the less patience you have left."""
     ),
     (
         "human",
-        """Target: {target}
-Current case strength: {score}/{threshold}
-Questions remaining: {remaining}
-Last turn usefulness: {last_turn_usefulness}
-Suspect's account so far, as ONE story:
-{narrative_summary}
+        """The conversation so far:
+{transcript}
+
+What they just said — this is what you are answering:
+"{last_answer}"
+
+Questions you have left: {remaining}
+
+What you want from them this turn:
+{aim}
+
+Specifics your partner checked, and where each comes from:
+{specifics}
+
+What you can stand on:
+{known_facts}
 
 On the table in front of you:
 {room_objects}
-
-Grounded Knowledge:
-{known_facts}
-
-Visible Case Log:
-{case_log}
-
-Recent Dialogue:
-{transcript}
 
 Next line:"""
     ),
@@ -1292,19 +1298,32 @@ def run_speaker(
 
     chain = speaker_prompt | get_llm(0.5).with_structured_output(SpeakerLine)
     spoken = invoke_with_retry(chain, label="speaker", payload={
+        # The moment, not the scoreboard: score, case log and summary were
+        # dropped from this input. With them, 64% of the spoken line was
+        # copied from the Lead's target; with the conversation first and the
+        # last answer set apart, 43% (same moment, three runs each).
         "persona": case.persona,
-        "target": move.target,
-        "score": score,
-        "threshold": case.arrest_threshold,
+        # The Lead's target is a finished paragraph and it came back out of
+        # the Speaker nearly word for word, announcements included. The
+        # Speaker gets what the Lead is after and the facts it checked, and
+        # has to find the words itself.
+        "aim": getattr(move, "aim", "") or move.target,
+        "specifics": "\n".join(f"- {g}" for g in getattr(move, "target_grounding", []) or [])
+        or "- none",
         "remaining": remaining,
-        "last_turn_usefulness": last_turn_usefulness,
-        "narrative_summary": narrative_summary,
+        "last_answer": next(
+            (t["text"] for t in reversed(transcript) if t["role"] == "suspect"), ""
+        ),
         "room_objects": case.room_objects or ["- Nothing but the case file"],
         "known_facts": known_facts,
-        "case_log": case_log.investigator_view() if case_log else {},
-        "transcript": transcript[-10:],
+        "transcript": "\n".join(
+            f"{'You' if t['role'] == 'investigator' else 'Suspect'}: {t['text']}"
+            for t in transcript
+        ),
     })
 
+    if spoken.in_the_moment:
+        print(f"  [in the moment] {spoken.in_the_moment}")
     if spoken.grounding:
         print("  [speaker grounding]")
         for item in spoken.grounding:

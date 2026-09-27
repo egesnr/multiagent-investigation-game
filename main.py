@@ -445,7 +445,7 @@ def run_turn(
     for item in move.target_grounding:
         print(f"  [target grounding] {item}")
     print(
-        f"  [strategy] target={move.target} | "
+        f"  [strategy] aim={move.aim} | target={move.target} | "
         f"remaining={state.max_questions - state.question_count}"
     )
 
