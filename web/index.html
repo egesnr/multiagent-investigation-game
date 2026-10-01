@@ -84,9 +84,9 @@
     font-size:0.85rem;
     letter-spacing:0.06em;
     text-transform:uppercase;
-    background:transparent;
-    border:1px solid #4a5058;
-    color:#c9cdd3;
+    background:#23272d;
+    border:1px solid #5a616a;
+    color:#dfe2e6;
     min-height:40px;
     padding:0 16px;
     border-radius:3px;
@@ -587,15 +587,6 @@
     font-size:0.9rem; cursor:pointer;
   }
   .drawer-close:hover{ background:#0000000f; }
-
-  /* ---------- Meter: where the fraud line is ---------- */
-  .threshold-mark{
-    position:absolute; left:-2px; right:-2px;
-    height:2px;
-    background:#e7e9eb;
-    box-shadow:0 0 0 1px #000a;
-  }
-  .threshold-note{ font-size:0.68rem; color:var(--console-dim); letter-spacing:0.04em; }
 
   /* ---------- First-time explanations ---------- */
   .coach{
@@ -1524,7 +1515,7 @@
   }
   .t-head .t-status{ font-variant-numeric:tabular-nums; color:#c9cdd3; }
   .t-scroll{
-    max-height:260px;
+    max-height:340px;
     overflow-y:auto;
     padding:4px 0;
   }
@@ -1563,6 +1554,19 @@
   .t-row.subject .who{ color:#c9b79a; }
   .t-row .txt{ font-size:0.86rem; line-height:1.55; color:#e7e9eb; }
   .t-row.system .txt{ font-size:0.8rem; font-style:italic; color:var(--console-dim); }
+  /* "Dana Whitfield is thinking..." while her reply is worked out */
+  .t-row.waiting .txt{ color:#aeb4bc; font-style:italic; display:flex; align-items:center; gap:8px; }
+  .t-row.waiting{ animation:none; }
+  .dots{ display:inline-flex; gap:4px; }
+  .dots i{
+    width:6px; height:6px; border-radius:50%;
+    background:#aeb4bc;
+    animation: dotPulse 1.2s ease-in-out infinite;
+  }
+  .dots i:nth-child(2){ animation-delay:0.2s; }
+  .dots i:nth-child(3){ animation-delay:0.4s; }
+  @keyframes dotPulse{ 0%,80%,100%{ opacity:0.25; transform:translateY(0); } 40%{ opacity:1; transform:translateY(-3px); } }
+  .wait-clock{ font-family:'IBM Plex Mono', monospace; font-style:normal; font-size:0.75rem; color:var(--console-dim); }
   .t-flag{
     margin-top:4px;
     display:inline-flex; align-items:center; gap:6px;
@@ -1576,54 +1580,91 @@
   .t-flag::before{ content:"⚑"; }
   .t-flag .pts{ color:#c9cdd3; font-family:'IBM Plex Mono', monospace; letter-spacing:0; }
 
-  /* Dossier panel */
+  /* Dossier panel: three sections with clear edges */
   .dossier{
     background:#1b1e23;
-    border:1px solid var(--console-border);
+    border:1px solid #4a5058;
     border-radius:4px;
-    padding:12px;
+    padding:10px;
     display:flex;
     flex-direction:column;
-    gap:14px;
+    gap:10px;
+    align-self:start;
+  }
+  .d-sec{
+    background:#23272d;
+    border:1px solid #3d434b;
+    border-radius:3px;
+    padding:10px 12px 12px;
+  }
+  .d-head{
+    display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    margin-bottom:9px;
   }
   .dossier h2{
     margin:0;
     font-family:'Oswald', sans-serif;
-    font-size:0.68rem;
-    letter-spacing:0.14em;
+    font-size:0.78rem;
+    letter-spacing:0.12em;
     text-transform:uppercase;
-    color:var(--console-dim);
-    border-bottom:1px solid var(--console-border);
-    padding-bottom:6px;
+    color:#aeb4bc;
   }
+  .d-val{
+    font-family:'IBM Plex Mono', monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:0.82rem;
+    color:#c9cdd3;
+    white-space:nowrap;
+  }
+  .d-val b{ font-size:1.05rem; color:#eceef0; }
 
-  .turn-pips{ display:flex; gap:5px; flex-wrap:wrap; }
+  .turn-pips{ display:flex; gap:6px; flex-wrap:wrap; }
   .turn-pips i{
-    width:11px; height:11px; border-radius:50%;
-    background:#33383f; border:1px solid #464c54;
+    width:14px; height:14px; border-radius:50%;
+    background:#33383f; border:1px solid #5a616a;
     display:block;
   }
   .turn-pips i.on{ background:var(--accent-amber); border-color:var(--accent-amber); }
 
-  .tension-row{ display:flex; align-items:flex-end; gap:12px; }
-  .tension-bar-track{
-    width:20px; height:96px;
-    background:#101215;
-    border:1px solid #3a4048;
-    border-radius:3px;
+  /* The meter: horizontal, with the fraud line drawn on it */
+  .h-meter{
     position:relative;
-    overflow:hidden;
+    height:14px;
+    background:#101215;
+    border:1px solid #4a5058;
+    border-radius:3px;
+    margin-bottom:22px;
   }
   .tension-bar-fill{
-    position:absolute; left:0; right:0; bottom:0;
-    height:8%;
+    position:absolute; left:0; top:0; bottom:0;
+    width:2%;
     background:var(--good);
-    transition: height 700ms ease, background 700ms ease;
+    border-radius:2px 0 0 2px;
+    transition: width 700ms ease, background 700ms ease;
   }
-  .tension-readout{ display:flex; flex-direction:column; gap:2px; font-variant-numeric:tabular-nums; }
-  .tension-readout .score{ font-size:1.5rem; color:#eceef0; }
-  .tension-readout .tier-label{ font-size:0.72rem; color:var(--console-dim); text-transform:uppercase; letter-spacing:0.06em; }
+  .threshold-mark{
+    position:absolute; top:-5px; bottom:-5px;
+    width:3px; margin-left:-1px;
+    background:#e0564a;
+  }
+  .threshold-mark span{
+    position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    margin-top:2px;
+    font-family:'Oswald', sans-serif;
+    font-size:0.66rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:#e0564a;
+  }
+  .tier-label{
+    display:block;
+    font-size:0.72rem;
+    color:var(--console-dim);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+  }
 
+  .board-sec .board{ min-height:110px; }
   .board{
     position:relative;
     background:#4a3a2c;
@@ -1631,21 +1672,22 @@
     background-size: 9px 9px;
     border:1px solid #2c2115;
     border-radius:3px;
-    min-height:150px;
-    padding:8px;
+    padding:10px 8px 8px;
     display:flex;
     flex-wrap:wrap;
     align-content:flex-start;
-    gap:8px;
+    gap:10px;
   }
   .board .empty-note{
     font-family:'Courier Prime', 'IBM Plex Mono', monospace;
     color:#c9b79a;
-    font-size:0.72rem;
+    font-size:0.78rem;
     padding:6px;
   }
   .card{
-    width:78px;
+    width:auto;
+    min-width:84px;
+    max-width:100%;
     background:var(--paper);
     color:var(--paper-ink);
     padding:6px 6px 8px;
@@ -1653,9 +1695,10 @@
     box-shadow: 1px 2px 4px #0006;
     font-family:'Courier Prime', monospace;
     font-weight:700;
-    font-size:0.6rem;
+    font-size:0.66rem;
     line-height:1.3;
     position:relative;
+    overflow-wrap:anywhere;
     animation: pin-in 320ms ease;
   }
   @keyframes pin-in{
@@ -1667,7 +1710,7 @@
     background:var(--accent-oxblood);
     box-shadow:0 1px 2px #0008;
   }
-  .card .tag{ font-weight:bold; display:block; }
+  .card .tag{ font-weight:bold; display:block; letter-spacing:0.02em; }
   .card .turn{ color:#6b5f4d; font-weight:400; }
 
   .t-input-row{
@@ -1716,7 +1759,7 @@
     .finale.play, .finale.play *{ animation-duration:1ms !important; animation-delay:0s !important; animation-iteration-count:1 !important; }
     .resolution.has-finale .verdict-stamp{ animation:none; opacity:1; transform:rotate(-5deg); }
     .resolution .reveal{ animation:none; }
-    .filepage.drawer, .coach, .pulse, .step-panel,
+    .filepage.drawer, .coach, .pulse, .step-panel, .dots i,
     .step-panel:not([hidden]) .ms-fill, .step-panel:not([hidden]) .ms-chip{ animation:none; }
   }
 </style>
@@ -1925,26 +1968,29 @@
       <div class="hud-thread" id="hudThread">opening question</div>
     </div>
 
+    <!-- Three clearly separated sections, each with its value in the header,
+         so the panel reads at a glance. The meter runs horizontally, the same
+         picture the briefing taught. -->
     <div class="dossier">
-      <div>
-        <h2>Question</h2>
-        <div class="turn-pips" id="pips"></div>
-      </div>
-
-      <div>
-        <h2>Case against you</h2>
-        <div class="tension-row" id="meter">
-          <div class="tension-bar-track">
-            <div class="tension-bar-fill" id="tensionFill"></div>
-            <div class="threshold-mark" id="thresholdMark"></div>
-          </div>
-          <div class="tension-readout">
-            <span class="score" id="scoreNum">0</span>
-            <span class="tier-label" id="tierLabel">Tier 1 &middot; routine</span>
-            <span class="threshold-note" id="thresholdNote"></span>
-          </div>
+      <section class="d-sec">
+        <div class="d-head">
+          <h2>Question</h2>
+          <span class="d-val" id="qCount">1 of 8</span>
         </div>
-      </div>
+        <div class="turn-pips" id="pips"></div>
+      </section>
+
+      <section class="d-sec" id="meter">
+        <div class="d-head">
+          <h2>Case against you</h2>
+          <span class="d-val"><b id="scoreNum">0</b> / <span id="thresholdNote">80</span></span>
+        </div>
+        <div class="h-meter">
+          <div class="tension-bar-fill" id="tensionFill"></div>
+          <div class="threshold-mark" id="thresholdMark"><span>fraud</span></div>
+        </div>
+        <span class="tier-label" id="tierLabel">Tier 1 &middot; routine</span>
+      </section>
 
       <!-- First-time explanations: each mechanic explains itself the first
            time it happens, instead of up front on the briefing. -->
@@ -1953,12 +1999,15 @@
         <button class="coach-ok" id="coachOk">Got it</button>
       </div>
 
-      <div>
-        <h2>Evidence Board</h2>
+      <section class="d-sec board-sec">
+        <div class="d-head">
+          <h2>Evidence board</h2>
+          <span class="d-val" id="boardCount">0 pinned</span>
+        </div>
         <div class="board" id="board">
           <span class="empty-note">&mdash; nothing pinned yet &mdash;</span>
         </div>
-      </div>
+      </section>
 
     </div>
 
@@ -1969,7 +2018,7 @@
       </div>
       <div class="t-scroll" id="tScroll"></div>
       <div class="t-input-row">
-        <input type="text" id="answerInput" placeholder="Type your answer as the suspect…" autocomplete="off" />
+        <input type="text" id="answerInput" placeholder="Type your answer, in your own words…" autocomplete="off" />
         <button class="send-btn" id="sendAnswerBtn">Send</button>
       </div>
     </div>
@@ -2997,8 +3046,8 @@
     room.setAttribute('data-tier', ui.tier);
     room.style.setProperty('--lamp-shade-color', t.lamp);
     vignetteEl.style.opacity = t.vignette;
-    var pct = Math.max(4, Math.min(100, (ui.score / 100) * 100));
-    document.getElementById('tensionFill').style.height = pct + '%';
+    var pct = Math.max(2, Math.min(100, (ui.score / 100) * 100));
+    document.getElementById('tensionFill').style.width = pct + '%';
     document.getElementById('tensionFill').style.background = t.barColor;
     document.getElementById('scoreNum').textContent = ui.score;
     document.getElementById('tierLabel').textContent = t.label;
@@ -3018,6 +3067,7 @@
   function updateQuestionCount(count, max){
     ui.question = count;
     ui.max = max;
+    document.getElementById('qCount').textContent = count + ' of ' + max;
     renderPips();
     updateTStatus();
   }
@@ -3049,6 +3099,22 @@
     return '<span class="t-flag">' + tag + ' <span class="pts">+' + points + ' pts</span></span>';
   }
 
+  // Pin the transcript to its newest line. Called as rows are added and on
+  // every typed character, so long lines don't type out below the fold.
+  function scrollChat(){
+    var scroll = document.getElementById('tScroll');
+    scroll.scrollTop = scroll.scrollHeight;
+  }
+
+  // Keep the answer box on screen: the transcript grows as lines arrive,
+  // which can push the box below the fold.
+  function showChatPanel(){
+    var r = document.querySelector('.t-input-row').getBoundingClientRect();
+    if (r.bottom > window.innerHeight){
+      window.scrollBy({ top: r.bottom - window.innerHeight + 16, behavior: reducedMotion ? 'auto' : 'smooth' });
+    }
+  }
+
   function addTranscriptRow(who, cls, text, onDone){
     var scroll = document.getElementById('tScroll');
     var row = document.createElement('div');
@@ -3070,6 +3136,7 @@
     var rate = withSound ? 32 : 16;
     var handle = setInterval(function(){
       el.textContent = text.slice(0, i);
+      scrollChat();
       if (withSound && text[i-1] && text[i-1] !== ' ') playClack();
       i++;
       if (i > text.length){
@@ -3082,6 +3149,8 @@
 
   function pinCard(tag, points, questionNum){
     var board = document.getElementById('board');
+    var n = board.querySelectorAll('.card').length + 1;
+    document.getElementById('boardCount').textContent = n + ' pinned';
     var empty = board.querySelector('.empty-note');
     if (empty) empty.remove();
     var card = document.createElement('div');
@@ -3091,11 +3160,61 @@
     board.appendChild(card);
   }
 
+  // While the investigator works out her reply (it can take up to a
+  // minute), a row in the transcript says so, with a running clock after a
+  // few seconds so a long wait never looks like a hang.
+  var waitRow = null, waitTimer = null;
+
+  function investigatorName(){
+    return (caseData && caseData.persona_line ? caseData.persona_line.split(',')[0] : 'The investigator').trim();
+  }
+
+  function showWaiting(){
+    hideWaiting();
+    var scroll = document.getElementById('tScroll');
+    waitRow = document.createElement('div');
+    waitRow.className = 't-row investigator waiting';
+    waitRow.setAttribute('role', 'status');
+    var who = document.createElement('span');
+    who.className = 'who';
+    who.textContent = 'Investigator';
+    var txt = document.createElement('span');
+    txt.className = 'txt';
+    var label = document.createElement('span');
+    label.textContent = investigatorName() + ' is thinking';
+    var dots = document.createElement('span');
+    dots.className = 'dots';
+    dots.setAttribute('aria-hidden', 'true');
+    dots.innerHTML = '<i></i><i></i><i></i>';
+    var clock = document.createElement('span');
+    clock.className = 'wait-clock';
+    txt.append(label, dots, clock);
+    waitRow.append(who, txt);
+    scroll.appendChild(waitRow);
+    scrollChat();
+    var started = Date.now();
+    waitTimer = setInterval(function(){
+      var sec = Math.round((Date.now() - started) / 1000);
+      if (sec >= 5) clock.textContent = sec + 's';
+    }, 1000);
+  }
+
+  function hideWaiting(){
+    if (waitTimer){ clearInterval(waitTimer); waitTimer = null; }
+    if (waitRow){ waitRow.remove(); waitRow = null; }
+  }
+
   function setSendingUI(isSending){
-    document.getElementById('answerInput').disabled = isSending;
+    var input = document.getElementById('answerInput');
+    input.disabled = isSending;
+    input.placeholder = isSending ? 'Wait for her next question…' : 'Type your answer, in your own words…';
     var btn = document.getElementById('sendAnswerBtn');
     btn.disabled = isSending;
-    btn.textContent = isSending ? 'Thinking…' : 'Send';
+    btn.textContent = isSending ? 'Waiting…' : 'Send';
+    if (!isSending){
+      hideWaiting();
+      input.focus({ preventScroll: true });
+    }
   }
 
   // A turn runs ~7 sequential LLM calls and can take over a minute — longer
@@ -3116,6 +3235,8 @@
     setSendingUI(true);
     var sentRow = addTranscriptRow('You', 'subject', text);
     input.value = '';
+    showWaiting();
+    showChatPanel();
 
     fetch('/api/turn', {
       method: 'POST',
@@ -3165,6 +3286,7 @@
   }
 
   function handleTurnResponse(data, sentRow){
+    hideWaiting();
     if (data.blocked){
       addSystemRow(data.notice);
       updateQuestionCount(data.question_count, data.max_questions);
@@ -3192,7 +3314,9 @@
       addDivider('Turn ' + data.question_count);
     }
 
+    showChatPanel();
     addTranscriptRow('Investigator', 'investigator', data.next_line, function(){
+      showChatPanel();
       if (data.ended){
         setTimeout(function(){
           populateResolution(data.resolution);
@@ -3406,7 +3530,7 @@
     }
     if (scoreAfter > scoreBefore){
       coach('meter', 'That meter is the case against you. It rises when your answers hurt you. ' +
-        'The white line is ' + line + ': finish above it and it’s a finding of fraud.',
+        'The red line is ' + line + ': finish above it and it’s a finding of fraud.',
         document.getElementById('meter'));
     }
   }
@@ -3567,8 +3691,8 @@
     ].concat(data.hint ? [data.hint] : []));
 
     // The meter in the room: mark where the fraud line sits on it.
-    document.getElementById('thresholdMark').style.bottom = Math.min(100, line) + '%';
-    document.getElementById('thresholdNote').textContent = 'fraud at ' + line;
+    document.getElementById('thresholdMark').style.left = Math.min(100, line) + '%';
+    document.getElementById('thresholdNote').textContent = line;
 
     document.getElementById('hudCaseLabel').textContent = data.scenario_type.toUpperCase() + ' · INTERVIEW FEED';
 
@@ -3616,6 +3740,7 @@
   function startTranscript(){
     document.getElementById('tScroll').innerHTML = '';
     document.getElementById('board').innerHTML = '<span class="empty-note">— nothing pinned yet —</span>';
+    document.getElementById('boardCount').textContent = '0 pinned';
     document.getElementById('coach').hidden = true;
     setScore(0);
     setThread(null);
