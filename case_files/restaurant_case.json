@@ -1,6 +1,101 @@
 {
   "scenario_type": "expense fraud",
   "persona": "Dana Whitfield, corporate fraud investigator: twelve years a police detective in financial crimes before she moved to corporate work, and she still runs an interview like one. She believes the first answer is always rehearsed and the truth leaks out in the second and third, so she is patient with the first and listens hard to what follows. She has watched small expense lies grow into careers of them, and that is why she takes this one seriously, not the amount. Dry and economical, more quietly amused by a bad excuse than angered by it; she never raises her voice, she goes quieter and more precise. Fair, and she will say so when an explanation genuinely holds up. Tired of people who decide the investigator is the problem. She lets a silence sit when it does more work than a question would.",
+  "player_situation": "You spent **$3,200** of the company's money on a dinner for one. Now you have to explain it.",
+  "player_timeline": [
+    {
+      "when": "Sept 2",
+      "what": "You fly to Stockholm for the Nordic Supplier Summit. **The company approved the trip.**"
+    },
+    {
+      "when": "Sept 4, afternoon",
+      "what": "**A rough call with a client.** It stays with you all day."
+    },
+    {
+      "when": "Sept 4, evening",
+      "what": "Nothing on the schedule. You eat **alone** at Vidblick and put the **$3,200 bill on the company card**. You tell yourself you'll **quietly pay back the difference.**"
+    },
+    {
+      "when": "The weeks after",
+      "what": "**You never do.**"
+    },
+    {
+      "when": "Three weeks later",
+      "what": "You're called in about the charge."
+    },
+    {
+      "when": "Today",
+      "what": "An interview room. **Dana Whitfield**, the company's fraud investigator, is waiting with a file."
+    }
+  ],
+  "player_details": [
+    {
+      "title": "Table",
+      "text": "For one",
+      "full": "The table was booked for one, and only your corporate card was charged."
+    },
+    {
+      "title": "Your calendar",
+      "text": "Empty",
+      "full": "Your work calendar has nothing at all that evening."
+    },
+    {
+      "title": "Itinerary",
+      "text": "Nothing that night",
+      "full": "The trip's approved itinerary had nothing planned that evening."
+    },
+    {
+      "title": "On the statement",
+      "text": "“Vidblick, Stockholm”",
+      "full": "On the card statement, the $3,200 charge shows up as “Vidblick, Stockholm”."
+    }
+  ],
+  "player_rules": [
+    {
+      "title": "$75",
+      "text": "a day for meals alone",
+      "full": "Meals alone on a work trip are capped at $75 a day. Anything more needs an exception approved before the trip."
+    },
+    {
+      "title": "$100+",
+      "text": "needs an itemized receipt",
+      "full": "Any card charge over $100 needs an itemized receipt showing what was bought."
+    },
+    {
+      "title": "24 h",
+      "text": "to report a billing problem",
+      "full": "A billing problem over $200 must be reported to Finance or the card issuer within 24 hours of noticing it."
+    }
+  ],
+  "player_conduct": [
+    {
+      "title": "Answer when asked",
+      "full": "When asked about your own card, you must give a real answer. Refusing again and again counts against you."
+    },
+    {
+      "title": "Stay civil",
+      "full": "Abusing or threatening the investigator is a separate violation."
+    },
+    {
+      "title": "Hiding a known problem counts too",
+      "full": "Keeping quiet about a problem you know is on your own card is a conduct issue on its own."
+    }
+  ],
+  "player_table": [
+    {
+      "title": "Card statement",
+      "text": "printed, this charge only"
+    },
+    {
+      "title": "Policy handbook",
+      "text": "tabbed at the meal limits"
+    },
+    {
+      "title": "HR rep",
+      "text": "taking notes, silent"
+    }
+  ],
+  "player_hint": "She'll let your first answer go. Then she'll **press, circle back to what you said, and wait for it to crack.**",
   "guilty": true,
   "arrest_threshold": 80,
   "policy_rules": [
