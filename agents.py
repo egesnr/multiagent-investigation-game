@@ -77,6 +77,9 @@ FALLBACK_MODELS = [
 # output cap: at 2048 their structured answers came back cut off mid-JSON.
 FALLBACK_MAX_OUTPUT_TOKENS = 8192
 
+# Seconds the main model gets before the backup is tried instead.
+MAIN_MODEL_TIMEOUT_S = 20
+
 
 class _BackupModel(ChatGoogleGenerativeAI):
     """A fallback that says so when it is used. A listener attached with
@@ -128,6 +131,11 @@ def get_llm(temperature: float = 0.3, max_output_tokens: int = MAX_OUTPUT_TOKENS
         temperature=temperature,
         max_output_tokens=max_output_tokens,
         max_retries=0,
+        # An overloaded model can hold a request ~50s before answering 503
+        # (Render: a 53s checker call, a 93s turn). Past this deadline Google
+        # returns 504 and the backup takes over. Google rejects deadlines
+        # under 10s; ordinary calls here take 1-15s.
+        timeout=MAIN_MODEL_TIMEOUT_S,
     )
     backups = [
         _BackupModel(
