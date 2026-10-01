@@ -546,8 +546,20 @@ class SpeakerLine(BaseModel):
     work) the next invention simply appeared in a category nobody had listed
     yet. Requiring a source for every specific claim closes all of them at
     once, including the ones nobody has thought of.
+
+    `in_the_moment` comes before both, for the same reason: the line used to
+    start from the Lead's target, a formal paragraph, and came out as one.
+    Registering what the suspect just did, as this person, first gives the
+    line something else to start from.
     """
 
+    in_the_moment: str = Field(
+        default="",
+        description="Never said aloud. In your own inner voice, a sentence or "
+        "two: what did the suspect just do in their last answer, and how "
+        "does that land on you, as the person you are, right now? React to "
+        "them, not to the case file. Your line comes out of this.",
+    )
     grounding: list[str] = Field(
         default_factory=list,
         description="Every specific factual claim about THIS case that your "
@@ -567,7 +579,8 @@ class SpeakerLine(BaseModel):
     line: str = Field(
         description="The words you actually say to the suspect, as spoken "
         "speech: contractions, short sentences, usually well under fifty "
-        "words. Every specific claim it makes must appear in grounding above."
+        "words, with what you felt above showing in how you say it. Every "
+        "specific claim it makes must appear in grounding above."
     )
 
 
@@ -726,6 +739,13 @@ class InvestigatorMind(BaseModel):
         "suspect saw — must be something they actually said or a fact from "
         "known_facts. Never invent a specific because it seems a likely "
         "inference."
+    )
+    aim: str = Field(
+        default="",
+        description="What you want the suspect to give you this turn, in a "
+        "few words: the thing to find out, pin down or get them to admit. A "
+        "goal, not a sentence to say to them. This, not the target, is what "
+        "reaches the person who speaks to the suspect.",
     )
     innocent_reading_won: bool = Field(
         description="True if the Alternative's read actually changed what you "
