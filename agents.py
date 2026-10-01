@@ -12,6 +12,7 @@ Knowledge boundary:
 """
 
 import os
+import re
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
@@ -88,6 +89,26 @@ class _BackupModel(ChatGoogleGenerativeAI):
         return super()._generate(*args, **kwargs)
 
 
+class _MainModel(ChatGoogleGenerativeAI):
+    """The main model, saying why it failed before a backup takes over. The
+    fallback chain catches the error, so without this a log shows that the
+    main model failed and never what it failed with."""
+
+    def _generate(self, *args, **kwargs):
+        try:
+            return super()._generate(*args, **kwargs)
+        except Exception as exc:
+            code = re.search(r"\b(4\d\d|5\d\d)\b", str(exc))
+            quota = re.search(r"quotaId'?:\s*'?([A-Za-z]+)", str(exc))
+            print(
+                f"  [main model error] {type(exc).__name__}"
+                + (f" {code.group(1)}" if code else "")
+                + (f" ({quota.group(1)})" if quota else "")
+                + f": {str(exc)[:160]}"
+            )
+            raise
+
+
 # Built once per setting and reused: every call used to construct the main
 # model and all three backups from scratch — 1.2s a turn locally, 6-12s on
 # Render's free CPU, logged there as "our code".
@@ -101,7 +122,7 @@ def get_llm(temperature: float = 0.3, max_output_tokens: int = MAX_OUTPUT_TOKENS
         )
     # One retry, not the library's six: with backups waiting, six retries
     # spent ~35s on every call learning that a daily quota was still gone.
-    main = ChatGoogleGenerativeAI(
+    main = _MainModel(
         model=MODEL_NAME,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
