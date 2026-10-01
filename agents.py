@@ -120,13 +120,14 @@ def get_llm(temperature: float = 0.3, max_output_tokens: int = MAX_OUTPUT_TOKENS
             temperature=temperature,
             max_output_tokens=max_output_tokens,
         )
-    # One retry, not the library's six: with backups waiting, six retries
-    # spent ~35s on every call learning that a daily quota was still gone.
+    # No retries: a backup is waiting. The library's six spent ~35s a call
+    # learning that a daily quota was still gone; one retry still spent ~10s
+    # on a 503 overload (Render, a 16s extractor call) before handing over.
     main = _MainModel(
         model=MODEL_NAME,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
-        max_retries=1,
+        max_retries=0,
     )
     backups = [
         _BackupModel(
