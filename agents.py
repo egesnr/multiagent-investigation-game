@@ -279,7 +279,14 @@ irregularity"). Do not discard them as opinion. An innocent suspect loses
 nothing by this: if the evidence does not contradict the denial, it simply
 stays unverified.
 This does not apply to pure refusals with no assertion in them ("no comment",
-"I'm not answering"), which remain non-claims.
+"I'm not answering"), which remain non-claims. Nor to answers with no content
+at all — random characters, gibberish, an empty reply. Content means meaning in
+any language: a word or two in another language, however short, is read for
+what it means, and an insult in any language is conduct under RULE 4b, not
+gibberish. Only a reply that means nothing in any language is empty. Those assert nothing, so
+they yield no claims, and the absence of an answer is not itself a claim:
+never extract "the suspect did not explain" or "the suspect failed to answer".
+Whether a question was answered is judged elsewhere, and charged there.
 
 RULE 4b — CONDUCT IN THE ROOM IS ITSELF A FACT:
 How the suspect behaves toward the investigator is not rhetoric to be
