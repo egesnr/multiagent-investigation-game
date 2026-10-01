@@ -38,7 +38,7 @@ from resolution import run_resolution
 
 
 WEB_DIR = Path(__file__).parent / "web"
-OBJECTIVE_TEXT = "Avoid a final finding of intentional fraud."
+OBJECTIVE_TEXT = "Make it look like a mistake, not fraud."
 SESSION_COOKIE = "the_box_session"
 
 app = FastAPI()
@@ -127,7 +127,9 @@ def _case_findings(state: GameState) -> list[dict]:
 
 @app.get("/")
 def index():
-    return FileResponse(WEB_DIR / "index.html")
+    # no-cache: browsers revalidate, so a redeploy is picked up on reload
+    # instead of an old copy of the page running against the new API.
+    return FileResponse(WEB_DIR / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.post("/api/start")
@@ -142,9 +144,6 @@ def start(response: Response):
         SESSION_COOKIE, session_id, httponly=True, samesite="lax", max_age=6 * 3600
     )
 
-    suspect_facts = [
-        f"{f.description}: {f.true_value}" for f in case.visible_facts("suspect")
-    ]
     present_people = [
         p for p in case.present_people if p not in ("suspect", "investigator")
     ]
@@ -152,9 +151,18 @@ def start(response: Response):
     return {
         "scenario_type": case.scenario_type,
         "persona_line": _persona_line(case.persona),
-        "suspect_facts": suspect_facts,
-        "room_objects": case.room_objects,
-        "present_people": present_people,
+        "situation": case.player_situation,
+        "timeline": [t.model_dump() for t in case.player_timeline],
+        "details": [i.model_dump() for i in case.player_details],
+        "rules": [i.model_dump() for i in case.player_rules],
+        "conduct": [i.model_dump() for i in case.player_conduct],
+        # What's in the room, as the player sees it: the author's version if
+        # there is one, otherwise the objects and people as the engine has them.
+        "table": [i.model_dump() for i in case.player_table] or [
+            {"title": o[:1].upper() + o[1:], "text": "", "full": ""}
+            for o in case.room_objects + present_people
+        ],
+        "hint": case.player_hint,
         "objective": OBJECTIVE_TEXT,
         "opening_question": question,
         "max_questions": state.max_questions,

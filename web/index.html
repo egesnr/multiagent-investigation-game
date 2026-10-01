@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>The Box</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Courier+Prime:wght@400;700&family=Special+Elite&family=Arvo:wght@400;700&display=swap">
@@ -80,13 +81,14 @@
   }
   .screen-toggle{
     font-family:'Oswald', sans-serif;
-    font-size:0.66rem;
-    letter-spacing:0.1em;
+    font-size:0.85rem;
+    letter-spacing:0.06em;
     text-transform:uppercase;
     background:transparent;
-    border:1px solid var(--console-border);
-    color:var(--console-dim);
-    padding:7px 12px;
+    border:1px solid #4a5058;
+    color:#c9cdd3;
+    min-height:40px;
+    padding:0 16px;
     border-radius:3px;
     cursor:pointer;
     white-space:nowrap;
@@ -151,12 +153,6 @@
     color:#5a4f3a;
     margin:0 0 22px;
   }
-  .briefing-grid{
-    display:grid;
-    grid-template-columns: 1.3fr 1fr;
-    gap:26px;
-  }
-  @media (max-width:700px){ .briefing-grid{ grid-template-columns:1fr; } }
   .filepage h3{
     font-family:'Oswald', sans-serif;
     font-size:0.72rem;
@@ -172,18 +168,465 @@
   }
   .filepage ul{ margin:0; padding-left:18px; }
   .filepage li{ margin-bottom:6px; }
-  .objective-box{
-    margin-top:18px;
-    background:#fff8;
-    border:1px solid #6b5f45;
-    border-left:4px solid var(--accent-oxblood);
-    padding:12px 14px;
-    font-size:0.88rem;
-    line-height:1.5;
-  }
   .quote-line{ font-family:'Courier Prime', monospace; font-size:0.85rem; }
+  .filepage h3.gap{ margin-top:22px; }
+  /* The scene-setter: the first thing to read, so it gets the big type. */
+  .filepage .situation{
+    margin:-6px 0 28px;
+    max-width:62ch;
+    font-family:'Courier Prime', monospace;
+    font-size:1.05rem;
+    line-height:1.6;
+    color:#1c1710;
+  }
+  .filepage .situation:empty{ display:none; }
+  .filepage .tip{
+    margin:10px 0 0;
+    font-size:0.8rem;
+    font-style:italic;
+    color:#5a4f3a;
+  }
+  .filepage .rules{ margin:0; padding-left:20px; }
+  .filepage .rules li::marker{ color:var(--accent-oxblood); font-weight:600; }
+
+  .begin-row{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-top:26px; }
+
+  /* ---------- Guided briefing ----------
+     Larger type than the rest of the file: this is the page a new player
+     learns the game from, so it reads like a page, not a form. */
+  .briefing{ width:100%; max-width:860px; margin:0 auto; }
+  .filepage.briefing p, .filepage.briefing li{ font-size:1rem; line-height:1.6; }
+  .filepage.briefing .brief-hook{
+    font-family:'Arvo', 'Courier Prime', serif;
+    font-weight:700;
+    font-size:clamp(1.35rem, 3.4vw, 1.9rem);
+    line-height:1.3;
+    color:#1c1710;
+    margin:4px 0 8px;
+    max-width:34ch;
+    text-wrap:balance;
+  }
+  .briefing .subhead{ margin-bottom:22px; }
+
+  /* Step bar: where you are, and every step is one click away. */
+  .steps{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:6px;
+    margin-bottom:26px;
+  }
+  .step-tab{
+    display:flex; align-items:center; gap:10px;
+    min-height:48px;
+    padding:8px 12px;
+    background:#00000010;
+    border:1px solid #6b5f4566;
+    border-bottom:3px solid #6b5f4566;
+    border-radius:3px;
+    color:#5a4f3a;
+    font-family:'Oswald', sans-serif;
+    font-size:0.95rem;
+    letter-spacing:0.04em;
+    text-align:left;
+    cursor:pointer;
+  }
+  .step-tab:hover{ background:#0000001a; }
+  .step-tab .n{
+    flex:none;
+    width:26px; height:26px;
+    display:grid; place-items:center;
+    border-radius:50%;
+    border:1.5px solid currentColor;
+    font-size:0.85rem;
+  }
+  .step-tab[aria-current="step"]{
+    background:#fff8;
+    color:#1c1710;
+    border-bottom-color:var(--accent-oxblood);
+  }
+  .step-tab[aria-current="step"] .n{ background:var(--accent-oxblood); border-color:var(--accent-oxblood); color:#f4ecd9; }
+  .step-tab.done .n{ background:#6b5f45; border-color:#6b5f45; color:#f4ecd9; }
+  @media (max-width:640px){
+    .step-tab{ justify-content:center; padding:6px; }
+    .step-tab .t{ display:none; }
+    .step-tab[aria-current="step"] .t{ display:inline; }
+    .steps{ grid-template-columns:auto auto auto auto; }
+  }
+
+  .step-panel{ min-height:300px; animation: stepIn 260ms ease; }
+  @keyframes stepIn{ from{ opacity:0; transform:translateY(6px); } }
+  .filepage .step-title{ font-size:1.5rem; margin:0 0 10px; }
+  .filepage .step-lede{ margin:0 0 18px; color:#3a3120; max-width:60ch; }
+  .filepage .step-sub{
+    font-size:0.8rem;
+    margin:28px 0 10px;
+  }
+
+  /* Step 1: the story as a timeline */
+  .timeline{ list-style:none; margin:0; padding:0; position:relative; }
+  .timeline::before{
+    content:""; position:absolute; left:7px; top:10px; bottom:10px;
+    width:2px; background:#6b5f4577;
+  }
+  .filepage .timeline li{
+    position:relative;
+    display:grid;
+    grid-template-columns:9rem 1fr;
+    gap:4px 16px;
+    padding:0 0 18px 30px;
+    margin:0;
+  }
+  .timeline li::before{
+    content:""; position:absolute; left:0; top:6px;
+    width:16px; height:16px; border-radius:50%;
+    background:#d9d0bd; border:2px solid #6b5f45;
+  }
+  .timeline li:last-child::before{ background:var(--accent-oxblood); border-color:var(--accent-oxblood); }
+  .timeline .when{
+    font-family:'Oswald', sans-serif;
+    font-size:0.9rem;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:#6b5f45;
+    padding-top:2px;
+  }
+  .timeline li:last-child .when{ color:var(--accent-oxblood); }
+  @media (max-width:640px){
+    .filepage .timeline li{ grid-template-columns:1fr; }
+  }
+
+  /* Bold words in the story carry its weight. */
+  .timeline b{ color:#1c1710; font-weight:700; }
+  .brief-hook b{ color:var(--accent-oxblood); }
+
+  /* Step 2: scannable tiles. Each shows a title and a short value; the
+     full sentence opens on tap, and lives in the drawer too. */
+  .filepage .step-sub.first{ margin-top:6px; }
+  .tap-tip{ display:block; margin-top:2px; font-size:0.85rem; color:#6b5f45; font-style:italic; }
+  /* align-items:start, so opening one tile doesn't stretch its row */
+  .tiles, .figures{ display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:10px; align-items:start; }
+  .tile{
+    display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+    text-align:left;
+    background:#fbf6ea;
+    border:1px solid #b9a77f;
+    border-radius:3px;
+    padding:12px 14px;
+    box-shadow:1px 2px 0 #0000001a;
+    color:#1c1710;
+    font:inherit;
+    cursor:pointer;
+  }
+  .tile{ position:relative; padding-right:30px; }
+  .tile:disabled{ cursor:default; }
+  /* "+" says there's more; it turns to "−" when open */
+  .tile:not(:disabled)::after{
+    content:"+";
+    position:absolute; top:8px; right:10px;
+    font-family:'Oswald', sans-serif; font-size:1.1rem; line-height:1;
+    color:#6b5f45;
+  }
+  .tile[aria-expanded="true"]::after{ content:"−"; color:var(--accent-oxblood); }
+  .tile:not(:disabled):hover{ border-color:#6b5f45; }
+  .tile[aria-expanded="true"]{ border-color:var(--accent-oxblood); background:#fff; }
+  .tile .t-title{
+    font-family:'Oswald', sans-serif;
+    font-size:0.78rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:#6b5f45;
+  }
+  .tile .t-text{ font-family:'Arvo', serif; font-weight:700; font-size:1.1rem; line-height:1.25; }
+  .tile .t-full{ margin-top:6px; font-size:0.88rem; line-height:1.45; color:#3a3120; }
+  /* Rules: the number is the headline */
+  .tile.figure{ border-top:4px solid var(--accent-oxblood); }
+  .tile.figure .t-title{
+    order:-1;
+    font-family:'Arvo', serif;
+    font-weight:700;
+    font-size:2rem;
+    letter-spacing:0;
+    text-transform:none;
+    color:var(--accent-oxblood);
+    line-height:1.1;
+  }
+  .tile.figure .t-text{ font-family:'IBM Plex Mono', monospace; font-weight:500; font-size:0.95rem; }
+
+  .conduct{ display:flex; align-items:center; gap:8px 12px; flex-wrap:wrap; margin-top:12px; }
+  .conduct-label{
+    font-family:'Oswald', sans-serif;
+    font-size:0.78rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:#6b5f45;
+  }
+  .conduct-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+  .conduct-chip{
+    font-family:'Oswald', sans-serif;
+    font-size:0.92rem;
+    background:transparent;
+    color:#2a2317;
+    border:1px solid #6b5f45;
+    border-radius:999px;
+    padding:4px 12px;
+    cursor:pointer;
+  }
+  .conduct-chip:hover{ background:#0000000d; }
+  .conduct-chip[aria-pressed="true"]{ background:#1c1710; color:#f1e8d5; border-color:#1c1710; }
+  .filepage.briefing .conduct-full{ margin:8px 0 0; font-size:0.9rem; color:#3a3120; }
+
+  .tags{ display:flex; gap:8px; flex-wrap:wrap; }
+  .tag{
+    background:#fbf6ea;
+    border:1px solid #b9a77f;
+    border-radius:3px;
+    padding:6px 12px;
+    font-size:0.9rem;
+    color:#3a3120;
+  }
+  .tag b{ font-family:'Oswald', sans-serif; font-weight:500; color:var(--accent-oxblood); letter-spacing:0.03em; }
+
+  /* Step 3: the goal leads, then the limit, the meter and the hint */
+  .goal-hero{
+    background:#1c1710;
+    color:#f1e8d5;
+    border-radius:3px;
+    padding:16px 20px;
+    margin-bottom:22px;
+  }
+  .goal-label{
+    display:block;
+    font-family:'Oswald', sans-serif;
+    font-size:0.8rem;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:#c9b79a;
+    margin-bottom:2px;
+  }
+  .filepage.briefing .goal-text{
+    margin:0;
+    font-family:'Arvo', serif;
+    font-weight:700;
+    font-size:clamp(1.25rem, 3vw, 1.6rem);
+    line-height:1.3;
+    color:#f1e8d5;
+  }
+  .hint-box{
+    margin-top:20px;
+    border:1.5px dashed var(--accent-oxblood);
+    border-radius:3px;
+    padding:12px 16px;
+    background:#fff5;
+  }
+  .hint-box .goal-label{ color:var(--accent-oxblood); }
+  .filepage.briefing .hint-box p{ margin:0; font-size:1.02rem; }
+  .hint-box b{ color:#1c1710; }
+
+  /* The drawer's copy of the story, tighter */
+  .filepage .timeline.compact li{ grid-template-columns:1fr; padding-bottom:12px; font-size:0.86rem; }
+  .timeline.compact .when{ font-size:0.75rem; }
+  .filepage .drawer-goal{ margin:0 0 8px; font-family:'Arvo', serif; font-weight:700; font-size:1rem; color:#1c1710; }
+
+  /* The limit and the meter */
+  .play-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .filepage.briefing .play-big{
+    margin:0;
+    font-family:'Arvo', serif;
+    font-weight:700;
+    font-size:1.2rem;
+    color:#1c1710;
+  }
+  .filepage.briefing .play-line{ margin:6px 0 0; }
+  .filepage.briefing .meter-show + .play-line{ margin-top:14px; }
+  .pips-demo{ display:inline-flex; gap:5px; }
+  .pips-demo i{ width:14px; height:14px; border-radius:50%; background:var(--accent-amber); display:block; }
+
+  .meter-show{
+    margin:22px 0 4px;
+    background:#1c1710;
+    border-radius:4px;
+    padding:14px 16px 16px;
+  }
+  .ms-head{
+    font-family:'Oswald', sans-serif;
+    font-size:0.85rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:#c9b79a;
+    margin-bottom:10px;
+  }
+  .ms-track{
+    position:relative;
+    height:22px;
+    background:#0f0c08;
+    border:1px solid #3d3428;
+    border-radius:3px;
+    margin-bottom:30px;
+  }
+  /* The fill climbs one notch as each slip lights up, then holds. */
+  .ms-fill{
+    position:absolute; left:0; top:0; bottom:0;
+    width:62%;
+    background:linear-gradient(90deg, var(--good), var(--accent-amber) 60%, #c06a3d);
+    border-radius:2px;
+  }
+  .step-panel:not([hidden]) .ms-fill{ animation: msClimb 3.2s ease-out both; }
+  @keyframes msClimb{
+    0%   { width:6%; }
+    20%  { width:6%; }
+    30%  { width:24%; }
+    45%  { width:24%; }
+    55%  { width:44%; }
+    70%  { width:44%; }
+    80%, 100% { width:62%; }
+  }
+  .ms-line{ position:absolute; top:-6px; bottom:-6px; width:3px; background:#e0564a; }
+  .ms-line span{
+    position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    margin-top:4px;
+    font-family:'Oswald', sans-serif;
+    font-size:0.8rem;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:#e0564a;
+    white-space:nowrap;
+  }
+  .ms-chips{ display:flex; gap:8px; flex-wrap:wrap; }
+  .ms-chip{
+    font-family:'Oswald', sans-serif;
+    font-size:0.95rem;
+    letter-spacing:0.03em;
+    color:#f1e8d5;
+    border:1px solid #6b5f45;
+    border-radius:999px;
+    padding:5px 12px;
+  }
+  .ms-chip b{ color:var(--accent-amber); }
+  .step-panel:not([hidden]) .ms-chip{ animation: chipOn 400ms ease both; }
+  .step-panel:not([hidden]) .ms-chip.c1{ animation-delay:0.75s; }
+  .step-panel:not([hidden]) .ms-chip.c2{ animation-delay:1.6s; }
+  .step-panel:not([hidden]) .ms-chip.c3{ animation-delay:2.4s; }
+  @keyframes chipOn{
+    from{ opacity:0.25; border-color:#3d3428; }
+    60%{ border-color:var(--accent-amber); background:#c98a3d33; }
+    to{ opacity:1; }
+  }
+
+  /* Step navigation: big, obvious buttons */
+  .step-nav{
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    margin-top:28px;
+    padding-top:18px;
+    border-top:1px dashed #6b5f45;
+  }
+  .step-count{
+    margin-left:auto;
+    font-family:'Oswald', sans-serif;
+    font-size:0.85rem;
+    letter-spacing:0.08em;
+    color:#6b5f45;
+  }
+  .nav-btn{
+    min-height:46px;
+    padding:0 18px;
+    background:transparent;
+    border:1.5px solid #6b5f45;
+    border-radius:3px;
+    color:#2a2317;
+    font-family:'Oswald', sans-serif;
+    font-size:0.95rem;
+    letter-spacing:0.04em;
+    cursor:pointer;
+  }
+  .nav-btn:hover{ background:#0000000f; }
+  .begin-btn.big{
+    min-height:48px;
+    padding:0 26px;
+    font-size:1rem;
+    letter-spacing:0.06em;
+  }
+  @media (max-width:520px){
+    .step-count{ display:none; }
+    .step-nav .begin-btn.big{ flex:1; }
+  }
+
+  .head-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  /* ---------- Case-file drawer ---------- */
+  .drawer-backdrop{
+    position:fixed; inset:0;
+    background:#0009;
+    z-index:20;
+  }
+  .filepage.drawer{
+    position:fixed; top:0; right:0; bottom:0;
+    width:min(440px, 100vw);
+    z-index:21;
+    border-radius:0;
+    overflow-y:auto;
+    padding:22px 26px 40px;
+    box-shadow:-20px 0 50px -20px #000c;
+    animation: drawerIn 220ms cubic-bezier(.2,.8,.3,1);
+  }
+  .filepage.drawer::before{ display:none; }
+  @keyframes drawerIn{ from{ transform:translateX(40px); opacity:0; } }
+  /* Stays put while the file scrolls, so the close button is always there. */
+  .drawer-head{
+    display:flex; justify-content:space-between; align-items:center;
+    position:sticky; top:-22px; z-index:1;
+    background:#d9d0bd;
+    margin:-22px -26px 10px;
+    padding:22px 26px 10px;
+    border-bottom:1px dashed #6b5f45;
+  }
+  .filepage.drawer h2{ font-size:1.4rem; margin:0; }
+  .drawer .subhead{ margin:0 0 18px; font-size:0.85rem; }
+  .drawer-close{
+    background:none; border:1px solid #6b5f45; color:#2a2317;
+    width:32px; height:32px; border-radius:3px;
+    font-size:0.9rem; cursor:pointer;
+  }
+  .drawer-close:hover{ background:#0000000f; }
+
+  /* ---------- Meter: where the fraud line is ---------- */
+  .threshold-mark{
+    position:absolute; left:-2px; right:-2px;
+    height:2px;
+    background:#e7e9eb;
+    box-shadow:0 0 0 1px #000a;
+  }
+  .threshold-note{ font-size:0.68rem; color:var(--console-dim); letter-spacing:0.04em; }
+
+  /* ---------- First-time explanations ---------- */
+  .coach{
+    background:#e7ded0;
+    color:#241f18;
+    border-left:4px solid var(--accent-amber);
+    border-radius:3px;
+    padding:10px 12px;
+    font-size:0.8rem;
+    line-height:1.5;
+    animation: coachIn 260ms ease;
+  }
+  @keyframes coachIn{ from{ opacity:0; transform:translateY(-6px); } }
+  .coach p{ margin:0 0 8px; }
+  .coach p b{ font-family:'Oswald', sans-serif; letter-spacing:0.06em; font-weight:600; }
+  .coach-ok{
+    font-family:'Oswald', sans-serif;
+    font-size:0.64rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    background:#241f18; color:#e7ded0;
+    border:none; border-radius:2px;
+    padding:5px 10px;
+    cursor:pointer;
+  }
+  .pulse{ animation: pulse 900ms ease 2; }
+  @keyframes pulse{
+    0%,100%{ box-shadow:0 0 0 0 #c98a3d00; }
+    40%{ box-shadow:0 0 0 4px #c98a3daa; }
+  }
   .begin-btn{
-    margin-top:26px;
     font-family:'Oswald', sans-serif;
     font-size:0.78rem;
     letter-spacing:0.1em;
@@ -1273,6 +1716,8 @@
     .finale.play, .finale.play *{ animation-duration:1ms !important; animation-delay:0s !important; animation-iteration-count:1 !important; }
     .resolution.has-finale .verdict-stamp{ animation:none; opacity:1; transform:rotate(-5deg); }
     .resolution .reveal{ animation:none; }
+    .filepage.drawer, .coach, .pulse, .step-panel,
+    .step-panel:not([hidden]) .ms-fill, .step-panel:not([hidden]) .ms-chip{ animation:none; }
   }
 </style>
 </head>
@@ -1285,37 +1730,99 @@
       <h1>The Box</h1>
       <p id="pageLede">Loading case file…</p>
     </div>
-    <div style="display:flex; gap:8px;">
+    <div class="head-actions">
+      <button class="screen-toggle" id="fileBtn" hidden>📁 Case file</button>
+      <button class="screen-toggle" id="helpBtn">? How to play</button>
       <button class="screen-toggle" id="soundBtn">🔊 Sound</button>
-      <button class="screen-toggle" id="screenToggle" disabled>View interview room →</button>
     </div>
   </header>
 
-  <!-- ================= BRIEFING SCREEN ================= -->
-  <section class="filepage" id="briefingScreen">
+  <!-- ================= BRIEFING SCREEN =================
+       A guided briefing in three short steps: the story (everything the
+       player knows), questions to think over, and the goal with the few
+       rules that matter. One screen of large text per step; the case-file
+       drawer repeats it for reference during the interview. -->
+  <section class="filepage briefing" id="briefingScreen">
     <div class="filepage-top">
       <span id="scenarioLabel">Internal Investigation</span>
       <span class="stamp">CONFIDENTIAL</span>
     </div>
-    <h2 id="caseTitle">Case File</h2>
-    <p class="subhead" id="personaLine">Loading…</p>
+    <p class="brief-hook" id="situationText">Loading the case…</p>
+    <p class="subhead" id="personaLine"></p>
 
-    <div class="briefing-grid">
-      <div>
-        <h3>What you know happened</h3>
-        <ul id="suspectFacts"></ul>
-        <h3 style="margin-top:18px;">In the room</h3>
-        <ul id="roomObjects"></ul>
+    <nav class="steps" aria-label="Briefing steps">
+      <button class="step-tab" data-step="0"><span class="n">1</span><span class="t">The story</span></button>
+      <button class="step-tab" data-step="1"><span class="n">2</span><span class="t">What to know</span></button>
+      <button class="step-tab" data-step="2"><span class="n">3</span><span class="t">Your goal</span></button>
+    </nav>
+
+    <!-- Everything the player knows, the real reason included, as one story. -->
+    <div class="step-panel" data-step="0">
+      <h2 class="step-title">What happened</h2>
+      <ol class="timeline" id="timeline"></ol>
+    </div>
+
+    <!-- What the player should have straight before the first question:
+         the finer details of their own story, the company rules they work
+         under, and what's physically in the room. Never what the
+         investigator holds. -->
+    <div class="step-panel" data-step="1" hidden>
+      <h2 class="step-title">What you should know</h2>
+      <p class="step-lede">Get these straight. She will ask about them. <span class="tap-tip">Tap any tile for the full detail.</span></p>
+
+      <h3 class="step-sub first">Your story</h3>
+      <div class="tiles" id="details"></div>
+
+      <h3 class="step-sub">Company rules</h3>
+      <div class="figures" id="rulesList"></div>
+      <div class="conduct">
+        <span class="conduct-label">In the room</span>
+        <span class="conduct-chips" id="conduct"></span>
       </div>
-      <div>
-        <h3>Your objective</h3>
-        <div class="objective-box" id="objectiveText">&mdash;</div>
-        <h3 style="margin-top:18px;">Opening question</h3>
-        <p class="quote-line" id="openingQuoteText">&mdash;</p>
+      <p class="conduct-full" id="conductFull" hidden></p>
+
+      <h3 class="step-sub">On the table</h3>
+      <div class="tags" id="tableItems"></div>
+    </div>
+
+    <div class="step-panel" data-step="2" hidden>
+      <div class="goal-hero">
+        <span class="goal-label">Your goal</span>
+        <p class="goal-text" id="objectiveText">&mdash;</p>
+      </div>
+
+      <div class="play-row">
+        <span class="pips-demo" id="pipsDemo" aria-hidden="true"></span>
+        <p class="play-big" id="howQuestions">A set number of questions.</p>
+      </div>
+
+      <div class="meter-show" aria-hidden="true">
+        <div class="ms-head">The case against you</div>
+        <div class="ms-track">
+          <div class="ms-fill"></div>
+          <div class="ms-line" id="mdLine"><span id="mdLabel">fraud</span></div>
+        </div>
+        <div class="ms-chips">
+          <span class="ms-chip c1">Contradict yourself <b>↑</b></span>
+          <span class="ms-chip c2">Dodge a question <b>↑</b></span>
+          <span class="ms-chip c3">Admit too much <b>↑</b></span>
+        </div>
+      </div>
+      <p class="play-line" id="howMeter">Slips push it up. Cross the line and it's fraud.</p>
+
+      <div class="hint-box" id="hintBox">
+        <span class="goal-label">Watch out</span>
+        <p id="hintText"></p>
       </div>
     </div>
 
-    <button class="begin-btn" id="beginBtn" disabled>Begin interview →</button>
+    <div class="step-nav">
+      <button class="nav-btn" id="stepBack">← Back</button>
+      <button class="nav-btn" id="skipBtn">I've played before: skip</button>
+      <span class="step-count" id="stepCount">1 of 3</span>
+      <button class="begin-btn big" id="stepNext">Next →</button>
+      <button class="begin-btn big" id="beginBtn" hidden disabled>Take your seat →</button>
+    </div>
   </section>
 
   <!-- ================= INTERVIEW SCREEN ================= -->
@@ -1425,16 +1932,25 @@
       </div>
 
       <div>
-        <h2>Tension</h2>
-        <div class="tension-row">
+        <h2>Case against you</h2>
+        <div class="tension-row" id="meter">
           <div class="tension-bar-track">
             <div class="tension-bar-fill" id="tensionFill"></div>
+            <div class="threshold-mark" id="thresholdMark"></div>
           </div>
           <div class="tension-readout">
             <span class="score" id="scoreNum">0</span>
             <span class="tier-label" id="tierLabel">Tier 1 &middot; routine</span>
+            <span class="threshold-note" id="thresholdNote"></span>
           </div>
         </div>
+      </div>
+
+      <!-- First-time explanations: each mechanic explains itself the first
+           time it happens, instead of up front on the briefing. -->
+      <div class="coach" id="coach" role="status" aria-live="polite" hidden>
+        <p id="coachText"></p>
+        <button class="coach-ok" id="coachOk">Got it</button>
       </div>
 
       <div>
@@ -2082,6 +2598,37 @@
   </section>
 </div>
 
+<!-- ================= CASE FILE DRAWER =================
+     The full file, openable from anywhere: the briefing, the interview, the
+     resolution. "Rules" opens the same drawer at the how-it-works section. -->
+<div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+<aside class="filepage drawer" id="caseDrawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden>
+  <div class="drawer-head">
+    <h2 id="drawerTitle">Case File</h2>
+    <button class="drawer-close" id="drawerClose" aria-label="Close case file">✕</button>
+  </div>
+  <p class="subhead" id="drawerPersona"></p>
+
+  <h3>The story</h3>
+  <ol class="timeline compact" id="drawerTimeline"></ol>
+
+  <h3 class="gap">Details</h3>
+  <ul id="drawerDetails"></ul>
+
+  <h3 class="gap">Company rules</h3>
+  <ul id="drawerCompanyRules"></ul>
+  <ul id="drawerConduct"></ul>
+
+  <h3 class="gap">On the table</h3>
+  <ul id="drawerTable"></ul>
+
+  <div id="rulesSection">
+    <h3 class="gap">Your goal</h3>
+    <p class="drawer-goal" id="drawerGoal"></p>
+    <ul class="rules" id="drawerRules"></ul>
+  </div>
+</aside>
+
 <script>
 (function(){
   var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -2629,7 +3176,9 @@
       pinCard(f.tag, f.points, data.question_count);
     });
 
+    var scoreBefore = ui.score;
     setScore(data.score);
+    coachTurn(data.findings || [], scoreBefore, data.score);
     updateQuestionCount(data.question_count, data.max_questions);
 
     if (data.findings && data.findings.length){
@@ -2762,61 +3311,312 @@
   var briefing = document.getElementById('briefingScreen');
   var interview = document.getElementById('interviewScreen');
   var resolution = document.getElementById('resolutionScreen');
-  var toggle = document.getElementById('screenToggle');
-  var current = 'briefing';
 
   function showScreen(name){
-    current = name;
     briefing.hidden = name !== 'briefing';
     interview.hidden = name !== 'interview';
     resolution.hidden = name !== 'resolution';
-    toggle.textContent = (name === 'briefing') ? 'View interview room →' : '← View case file';
+    // Once there's an interview, the full file lives in the drawer.
+    document.getElementById('fileBtn').hidden = name === 'briefing';
     var target = name === 'briefing' ? briefing : (name === 'interview' ? interview : resolution);
     requestAnimationFrame(function(){
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }
 
+  // ---------- Case-file drawer ----------
+  var drawer = document.getElementById('caseDrawer');
+  var drawerBackdrop = document.getElementById('drawerBackdrop');
+  var drawerOpener = null;
+
+  function openDrawer(section){
+    drawerOpener = document.activeElement;
+    drawer.hidden = false;
+    drawerBackdrop.hidden = false;
+    document.body.style.overflow = 'hidden';
+    drawer.scrollTop = 0;
+    if (section === 'rules'){
+      document.getElementById('rulesSection').scrollIntoView({ block: 'start' });
+    }
+    // preventScroll: the close button is at the top, and focusing it would
+    // undo the jump to the rules section.
+    document.getElementById('drawerClose').focus({ preventScroll: true });
+  }
+
+  function closeDrawer(){
+    if (drawer.hidden) return;
+    drawer.hidden = true;
+    drawerBackdrop.hidden = true;
+    document.body.style.overflow = '';
+    if (drawerOpener && drawerOpener.focus) drawerOpener.focus();
+  }
+
+  document.getElementById('fileBtn').addEventListener('click', function(){ openDrawer(); });
+  document.getElementById('helpBtn').addEventListener('click', function(){ openDrawer('rules'); });
+  document.getElementById('drawerClose').addEventListener('click', closeDrawer);
+  drawerBackdrop.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') closeDrawer();
+  });
+
+  // ---------- First-time explanations ----------
+  // Each mechanic explains itself the first time it happens, instead of up
+  // front on the briefing. Remembered for the page's lifetime, so a second
+  // interview doesn't repeat them.
+  var FINDING_EXPLAINED = {
+    'CONTRADICTION': 'what you said doesn’t fit an earlier answer or the record.',
+    'ADMISSION':     'you conceded something that helps their case.',
+    'EVASION':       'you sidestepped a direct question.',
+    'POLICY BREACH': 'what you said shows a rule was broken.'
+  };
+  var coached = {};
+
+  function coach(key, html, pulseEl){
+    if (coached[key]) return;
+    coached[key] = true;
+    document.getElementById('coachText').innerHTML = html;
+    document.getElementById('coach').hidden = false;
+    if (pulseEl && !reducedMotion){
+      pulseEl.classList.remove('pulse'); void pulseEl.offsetWidth; pulseEl.classList.add('pulse');
+    }
+  }
+
+  document.getElementById('coachOk').addEventListener('click', function(){
+    document.getElementById('coach').hidden = true;
+  });
+
+  function escapeHtml(t){
+    var d = document.createElement('div'); d.textContent = t; return d.innerHTML;
+  }
+
+  // Called after each turn with that turn's findings and score change.
+  function coachTurn(findings, scoreBefore, scoreAfter){
+    var line = caseData.arrest_threshold;
+    for (var i = 0; i < findings.length; i++){
+      var f = findings[i];
+      if (coached['tag:' + f.tag]) continue;
+      var why = FINDING_EXPLAINED[f.tag] || 'something you said counts against you.';
+      var cards = document.querySelectorAll('#board .card');
+      coach('tag:' + f.tag,
+        '<b>' + escapeHtml(f.tag) + '</b>: ' + why + ' It’s pinned to the board and adds ' +
+        f.points + ' to the case against you. At ' + line + ' it’s a finding of fraud.',
+        cards[cards.length - 1]);
+      coached.meter = true; // the finding note already explains the meter
+      return;
+    }
+    if (scoreAfter > scoreBefore){
+      coach('meter', 'That meter is the case against you. It rises when your answers hurt you. ' +
+        'The white line is ' + line + ': finish above it and it’s a finding of fraud.',
+        document.getElementById('meter'));
+    }
+  }
+
+  // Case text marks bold words with **double asterisks**. Built as DOM nodes,
+  // never innerHTML, so case text can't inject markup.
+  function richText(el, text){
+    el.textContent = '';
+    String(text || '').split(/\*\*(.+?)\*\*/).forEach(function(part, i){
+      if (!part) return;
+      if (i % 2){
+        var b = document.createElement('b');
+        b.textContent = part;
+        el.appendChild(b);
+      } else {
+        el.appendChild(document.createTextNode(part));
+      }
+    });
+    return el;
+  }
+
+  function fillRichList(id, items, tag){
+    var wrap = document.getElementById(id);
+    wrap.innerHTML = '';
+    items.forEach(function(text){
+      wrap.appendChild(richText(document.createElement(tag || 'li'), text));
+    });
+  }
+
+  function fillTimeline(id, entries){
+    var tl = document.getElementById(id);
+    tl.innerHTML = '';
+    entries.forEach(function(t){
+      var li = document.createElement('li');
+      var w = document.createElement('span');
+      w.className = 'when';
+      w.textContent = t.when;
+      li.append(w, richText(document.createElement('span'), t.what));
+      tl.appendChild(li);
+    });
+  }
+
+  // Room objects can arrive in the engine's lower-case form.
+  // A briefing item as one line of plain text: its full sentence when it has
+  // one, else "Title: text".
+  function itemLine(item){
+    return item.full || (item.text ? item.title + ': ' + item.text : item.title);
+  }
+
+  function el(tag, cls, text){
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text) e.textContent = text;
+    return e;
+  }
+
+  // A tile shows title and value; tapping it opens the full sentence.
+  function fillTiles(id, items, cls){
+    var wrap = document.getElementById(id);
+    wrap.innerHTML = '';
+    items.forEach(function(item){
+      var tile = el('button', cls);
+      tile.type = 'button';
+      tile.setAttribute('aria-expanded', 'false');
+      tile.append(el('span', 't-title', item.title), el('span', 't-text', item.text));
+      if (item.full){
+        var full = el('span', 't-full', item.full);
+        full.hidden = true;
+        tile.appendChild(full);
+        tile.addEventListener('click', function(){
+          var open = tile.getAttribute('aria-expanded') !== 'true';
+          tile.setAttribute('aria-expanded', String(open));
+          full.hidden = !open;
+        });
+      } else {
+        tile.disabled = true;
+      }
+      wrap.appendChild(tile);
+    });
+  }
+
+  // Conduct rules are short chips; the chosen one's full sentence shows
+  // under the row.
+  function fillConduct(items){
+    var wrap = document.getElementById('conduct');
+    var out = document.getElementById('conductFull');
+    wrap.innerHTML = '';
+    out.hidden = true;
+    items.forEach(function(item){
+      var chip = el('button', 'conduct-chip', item.title);
+      chip.type = 'button';
+      chip.setAttribute('aria-pressed', 'false');
+      chip.addEventListener('click', function(){
+        var on = chip.getAttribute('aria-pressed') !== 'true';
+        wrap.querySelectorAll('.conduct-chip').forEach(function(c){ c.setAttribute('aria-pressed', 'false'); });
+        chip.setAttribute('aria-pressed', String(on));
+        out.textContent = item.full;
+        out.hidden = !on;
+      });
+      wrap.appendChild(chip);
+    });
+  }
+
   function renderBriefing(data){
     caseData = data;
+    var line = data.arrest_threshold;
 
     document.getElementById('pageLede').textContent =
-      'A real interview, driven by the multi-agent pipeline — every question and every finding below comes from a live run.';
+      'One charge you have to explain, one investigator across the table. Nothing is scripted, and every answer counts.';
     document.getElementById('scenarioLabel').textContent = 'Internal Investigation · ' + data.scenario_type;
     document.getElementById('scenarioLabelResolution').textContent = 'Internal Investigation · ' + data.scenario_type;
-    document.getElementById('caseTitle').textContent = 'Case File';
     document.getElementById('resolutionTitle').textContent = 'Resolution';
     document.getElementById('personaLine').textContent = 'Interviewer: ' + data.persona_line;
+    document.getElementById('drawerPersona').textContent = 'Interviewer: ' + data.persona_line;
     document.getElementById('resolutionPersonaLine').textContent = data.persona_line;
 
-    var facts = document.getElementById('suspectFacts');
-    facts.innerHTML = '';
-    data.suspect_facts.forEach(function(f){
-      var li = document.createElement('li');
-      li.textContent = f;
-      facts.appendChild(li);
+    // Step 1: the story
+    richText(document.getElementById('situationText'), data.situation || 'Case file');
+    fillTimeline('timeline', data.timeline || []);
+
+    // Step 2: what you should know
+    fillTiles('details', data.details || [], 'tile');
+    fillTiles('rulesList', data.rules || [], 'tile figure');
+    fillConduct(data.conduct || []);
+    var tags = document.getElementById('tableItems');
+    tags.innerHTML = '';
+    (data.table || []).forEach(function(t){
+      var tag = el('span', 'tag', null);
+      tag.append(el('b', null, t.title), document.createTextNode(t.text ? ' \u00b7 ' + t.text : ''));
+      tags.appendChild(tag);
     });
 
-    var objects = document.getElementById('roomObjects');
-    objects.innerHTML = '';
-    data.room_objects.concat(data.present_people).forEach(function(o){
-      var li = document.createElement('li');
-      li.textContent = o.charAt(0).toUpperCase() + o.slice(1) + '.';
-      objects.appendChild(li);
-    });
-
+    // Step 3: your goal, the meter, the limit, the hint
     document.getElementById('objectiveText').textContent = data.objective;
-    document.getElementById('openingQuoteText').textContent = '“' + data.opening_question + '”';
+    var pips = document.getElementById('pipsDemo');
+    pips.innerHTML = '';
+    for (var i = 0; i < data.max_questions; i++) pips.appendChild(document.createElement('i'));
+    document.getElementById('howQuestions').textContent = data.max_questions + ' questions. Get through them.';
+    // The meter runs 0-100, same as the one in the room.
+    document.getElementById('mdLine').style.left = Math.min(100, line) + '%';
+    document.getElementById('mdLabel').textContent = line + ' · fraud';
+    document.getElementById('howMeter').textContent =
+      'Slips push it up. Reach ' + line + ' and it’s fraud.';
+    richText(document.getElementById('hintText'), data.hint);
+    document.getElementById('hintBox').hidden = !data.hint;
+
+    // The drawer: the same briefing, for reference during the interview
+    fillTimeline('drawerTimeline', data.timeline || []);
+    fillRichList('drawerDetails', (data.details || []).map(itemLine));
+    fillRichList('drawerCompanyRules', (data.rules || []).map(itemLine));
+    fillRichList('drawerConduct', (data.conduct || []).map(itemLine));
+    fillRichList('drawerTable', (data.table || []).map(itemLine));
+    document.getElementById('drawerGoal').textContent = data.objective;
+    fillRichList('drawerRules', [
+      '**' + data.max_questions + ' questions.** Answer in your own words.',
+      'Contradicting yourself, dodging or admitting too much **pushes the meter up**.',
+      'Reach **' + line + '** and it’s fraud.'
+    ].concat(data.hint ? [data.hint] : []));
+
+    // The meter in the room: mark where the fraud line sits on it.
+    document.getElementById('thresholdMark').style.bottom = Math.min(100, line) + '%';
+    document.getElementById('thresholdNote').textContent = 'fraud at ' + line;
 
     document.getElementById('hudCaseLabel').textContent = data.scenario_type.toUpperCase() + ' · INTERVIEW FEED';
 
-    document.getElementById('screenToggle').disabled = false;
     document.getElementById('beginBtn').disabled = false;
+    document.getElementById('skipBtn').disabled = false;
+    goStep(0);
   }
+
+  // ---------- Briefing steps ----------
+  var STEP_NAMES = ['The story', 'What to know', 'Your goal'];
+  var stepTabs = Array.prototype.slice.call(document.querySelectorAll('.step-tab'));
+  var stepPanels = Array.prototype.slice.call(document.querySelectorAll('.step-panel'));
+  var currentStep = 0;
+
+  function goStep(n){
+    var last = stepPanels.length - 1;
+    currentStep = Math.max(0, Math.min(last, n));
+    stepPanels.forEach(function(p, i){ p.hidden = i !== currentStep; });
+    stepTabs.forEach(function(t, i){
+      if (i === currentStep) t.setAttribute('aria-current', 'step');
+      else t.removeAttribute('aria-current');
+      t.classList.toggle('done', i < currentStep);
+    });
+    document.getElementById('stepBack').hidden = currentStep === 0;
+    document.getElementById('skipBtn').hidden = currentStep !== 0;
+    document.getElementById('stepNext').hidden = currentStep === last;
+    document.getElementById('beginBtn').hidden = currentStep !== last;
+    if (currentStep < last){
+      document.getElementById('stepNext').textContent = 'Next: ' + STEP_NAMES[currentStep + 1] + ' →';
+    }
+    document.getElementById('stepCount').textContent = (currentStep + 1) + ' of ' + stepPanels.length;
+    // Keep the top of the card in view when a step is shorter than the last.
+    var top = briefing.getBoundingClientRect().top;
+    if (top < 0) briefing.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+  }
+
+  stepTabs.forEach(function(t, i){ t.addEventListener('click', function(){ goStep(i); }); });
+  document.getElementById('stepNext').addEventListener('click', function(){ goStep(currentStep + 1); });
+  document.getElementById('stepBack').addEventListener('click', function(){ goStep(currentStep - 1); });
+  document.getElementById('skipBtn').disabled = true;
+  document.getElementById('skipBtn').addEventListener('click', function(){
+    document.getElementById('beginBtn').click();
+  });
 
   function startTranscript(){
     document.getElementById('tScroll').innerHTML = '';
     document.getElementById('board').innerHTML = '<span class="empty-note">— nothing pinned yet —</span>';
+    document.getElementById('coach').hidden = true;
     setScore(0);
     setThread(null);
     updateQuestionCount(1, caseData.max_questions);
@@ -2850,11 +3650,7 @@
     });
   });
 
-  document.getElementById('backToFileBtn').addEventListener('click', function(){ showScreen('briefing'); });
-
-  toggle.addEventListener('click', function(){
-    showScreen(current === 'briefing' ? 'interview' : 'briefing');
-  });
+  document.getElementById('backToFileBtn').addEventListener('click', function(){ openDrawer(); });
 
   document.getElementById('soundBtn').addEventListener('click', function(){
     soundOn = !soundOn;

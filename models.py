@@ -60,6 +60,20 @@ class Fact(BaseModel):
     visible_to: list[str]
 
 
+class TimelineEntry(BaseModel):
+    """One beat of the story as the player sees it on the briefing."""
+    when: str
+    what: str
+
+
+class BriefItem(BaseModel):
+    """One scannable item on the briefing: a short title, an optional short
+    value, and the full sentence the player can open for detail."""
+    title: str
+    text: str = ""
+    full: str = ""
+
+
 class CaseFile(BaseModel):
     scenario_type: str
     persona: str
@@ -68,6 +82,25 @@ class CaseFile(BaseModel):
     policy_rules: list[str] = Field(default_factory=list)
     arrest_threshold: int = 80
     claim_categories: list[str] = Field(default_factory=list)
+
+    # The player's briefing. Display only: no agent prompt reads any of it.
+    # Second person, only what the suspect knows; **double asterisks** mark
+    # words the briefing shows in bold.
+    player_situation: str = ""
+    player_timeline: list[TimelineEntry] = Field(default_factory=list)
+    # Details of the player's own story that the timeline doesn't carry:
+    # only things the suspect knows.
+    player_details: list[BriefItem] = Field(default_factory=list)
+    # The company rules (policy_rules) the case turns on, headlined by their
+    # number, as an employee would know them.
+    player_rules: list[BriefItem] = Field(default_factory=list)
+    # The remaining policy_rules, about conduct in the room, as short phrases.
+    player_conduct: list[BriefItem] = Field(default_factory=list)
+    # The room's objects and people, as the player sees them. Falls back to
+    # room_objects / present_people when empty.
+    player_table: list[BriefItem] = Field(default_factory=list)
+    # One line on how the investigator will come at you.
+    player_hint: str = ""
 
     # Physical/world state is deliberately narrow. Open-world speech is allowed,
     # but the player cannot conjure objects or people into the room by typing it.
