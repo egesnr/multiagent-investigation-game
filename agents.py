@@ -194,6 +194,15 @@ def _groq_llm(temperature: float, max_output_tokens: int):
     return main.with_fallbacks(backups)
 
 
+def _require_reply(parsed):
+    # DeepSeek sometimes answers in prose instead of calling the tool; the
+    # parser then yields None and the turn crashed on it (the Lead, live
+    # test). Raising hands it to invoke_with_retry for another try.
+    if parsed is None:
+        raise ValueError("model replied without filling the schema")
+    return parsed
+
+
 def _deepseek_llm(temperature: float, max_output_tokens: int):
     # DeepSeek speaks the OpenAI API. Imported here so other deploys don't
     # need the package.
@@ -219,7 +228,8 @@ def _deepseek_llm(temperature: float, max_output_tokens: int):
             llm = self.bind_tools(
                 [tool], tool_choice=tool["function"]["name"], parallel_tool_calls=False,
             )
-            return llm | PydanticToolsParser(tools=[schema], first_tool_only=True)
+            return llm | PydanticToolsParser(tools=[schema], first_tool_only=True) | _require_reply
+
 
     return _DeepSeek(
         model=MODEL_NAME,
