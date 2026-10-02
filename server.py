@@ -29,6 +29,7 @@ logger = logging.getLogger("uvicorn.error")
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from main import DEFAULT_CASE_PATH, load_case, opening_question, run_turn
@@ -42,6 +43,8 @@ OBJECTIVE_TEXT = "Make it look like a mistake, not fraud."
 SESSION_COOKIE = "the_box_session"
 
 app = FastAPI()
+# The typewriter recordings (CC0, BigSoundBank: Hermes Precisa 305).
+app.mount("/sounds", StaticFiles(directory=WEB_DIR / "sounds"), name="sounds")
 
 # session_id -> {"state": GameState, "last_question": str}. Process-local,
 # not shared across workers/replicas — this app must run as a single process.
