@@ -98,6 +98,19 @@
 
   [hidden]{ display:none !important; }
 
+  /* ?demo only: says plainly that the replies are scripted */
+  .demo-banner{
+    position:sticky; top:0; z-index:30;
+    margin:-28px -20px 18px;
+    padding:8px 16px;
+    background:var(--accent-amber);
+    color:#1c1710;
+    font-family:'Oswald', sans-serif;
+    font-size:0.85rem;
+    letter-spacing:0.04em;
+    text-align:center;
+  }
+
   /* ================= CASE-FILE STYLE (briefing + resolution) ================= */
   .filepage{
     background: linear-gradient(180deg, #d9d0bd, #cbc0a8);
@@ -425,7 +438,6 @@
   /* The drawer's copy of the story, tighter */
   .filepage .timeline.compact li{ grid-template-columns:1fr; padding-bottom:12px; font-size:0.86rem; }
   .timeline.compact .when{ font-size:0.75rem; }
-  .filepage .drawer-goal{ margin:0 0 8px; font-family:'Arvo', serif; font-weight:700; font-size:1rem; color:#1c1710; }
 
   /* The limit and the meter */
   .play-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
@@ -569,6 +581,10 @@
     animation: drawerIn 220ms cubic-bezier(.2,.8,.3,1);
   }
   .filepage.drawer::before{ display:none; }
+  /* The drawer carries .briefing for the shared step styles; undo the
+     briefing card's own width and centring. */
+  .filepage.briefing.drawer{ max-width:none; margin:0; }
+  .drawer .goal-hero{ margin-top:4px; }
   @keyframes drawerIn{ from{ transform:translateX(40px); opacity:0; } }
   /* Stays put while the file scrolls, so the close button is always there. */
   .drawer-head{
@@ -1427,6 +1443,27 @@
   .room-frame[data-tier="5"] .r-hall{ opacity:.9; }
   .room-frame[data-tier="5"] .r-officer{ opacity:1; transform:translateX(-26px); }
 
+  /* Opening beat: she flicks the statement across the table. It starts at
+     her hands, lands on your side, settles, and stays. */
+  .r-sheet, .r-hands{ transform-box:view-box; }
+  .r-sheet{ opacity:0; transform-origin:366px 549px; }
+  .room-frame.sheet-in .r-sheet{ opacity:1; }
+  .room-frame.sheet-toss .r-sheet{ animation: sheetToss 900ms cubic-bezier(.25,.7,.3,1) both; }
+  @keyframes sheetToss{
+    0%  { opacity:0; transform:translate(190px,-92px) scale(.5) rotate(14deg); }
+    12% { opacity:1; }
+    62% { transform:translate(-8px,5px) scale(1.03) rotate(-3deg); }
+    82% { transform:translate(2px,-1px) rotate(1deg); }
+    100%{ opacity:1; transform:none; }
+  }
+  .r-hands{ transform-origin:560px 457px; }
+  .room-frame.sheet-toss .r-hands{ animation: handsFlick 600ms ease-out; }
+  @keyframes handsFlick{
+    0%  { transform:none; }
+    35% { transform:translate(-16px,10px); }
+    100%{ transform:none; }
+  }
+
   .lamp-shade{ transition: fill 700ms ease; }
   .vignette{ transition: opacity 900ms ease; }
 
@@ -1750,6 +1787,7 @@
   @media (prefers-reduced-motion: reduce){
     .room-frame.shake{ animation:none; }
     .investigator, .r-file, .r-door, .r-hall, .r-officer{ transition:none; }
+    .room-frame.sheet-toss .r-sheet, .room-frame.sheet-toss .r-hands{ animation:none; }
     .flash.hit{ animation:none; }
     .card{ animation:none; }
     .verdict-stamp{ animation:none; opacity:1; transform:rotate(-5deg); }
@@ -1940,10 +1978,23 @@
             <path d="M470,300 Q480,250 560,250 Q640,250 650,300 L660,420 L460,420 Z" fill="var(--silhouette)"/>
             <circle cx="560" cy="228" r="34" fill="var(--silhouette)"/>
 
-            <g>
+            <g class="r-hands">
               <rect x="480" y="450" width="42" height="14" rx="5" fill="var(--hands)"/>
               <rect x="598" y="450" width="42" height="14" rx="5" fill="var(--hands)"/>
             </g>
+          </g>
+
+          <!-- The card statement for this one charge: tossed across to you as
+               the interview opens, and left there. A single sheet, lightly,
+               so the folder (tier 3) and the slam (the CAUGHT ending) keep
+               their weight. -->
+          <g class="r-sheet">
+            <polygon points="318,527 404,523 414,570 320,575" fill="#e7ded0"/>
+            <line x1="328" y1="535" x2="372" y2="533" stroke="#2a2317" stroke-width="3"/>
+            <line x1="328" y1="545" x2="396" y2="542" stroke="#8a8173" stroke-width="1.5"/>
+            <line x1="329" y1="552" x2="398" y2="549" stroke="#8a8173" stroke-width="1.5"/>
+            <line x1="330" y1="560" x2="401" y2="557" stroke="#9c3b2e" stroke-width="3"/>
+            <line x1="331" y1="567" x2="380" y2="565" stroke="#8a8173" stroke-width="1.5"/>
           </g>
 
           <!-- the case file: out on the table at tier 3, pushed at you from tier 4 -->
@@ -2651,11 +2702,15 @@
      The full file, openable from anywhere: the briefing, the interview, the
      resolution. "Rules" opens the same drawer at the how-it-works section. -->
 <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
-<aside class="filepage drawer" id="caseDrawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden>
+<!-- One drawer, two views: "Case file" shows the story and the details;
+     "How to play" shows the briefing's goal step, as the player first saw it. -->
+<aside class="filepage briefing drawer" id="caseDrawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden>
   <div class="drawer-head">
     <h2 id="drawerTitle">Case File</h2>
-    <button class="drawer-close" id="drawerClose" aria-label="Close case file">✕</button>
+    <button class="drawer-close" id="drawerClose" aria-label="Close">✕</button>
   </div>
+
+  <div id="fileSection">
   <p class="subhead" id="drawerPersona"></p>
 
   <h3>The story</h3>
@@ -2670,12 +2725,10 @@
 
   <h3 class="gap">On the table</h3>
   <ul id="drawerTable"></ul>
-
-  <div id="rulesSection">
-    <h3 class="gap">Your goal</h3>
-    <p class="drawer-goal" id="drawerGoal"></p>
-    <ul class="rules" id="drawerRules"></ul>
   </div>
+
+  <!-- Filled with a copy of the briefing's goal step -->
+  <div class="step-panel" id="rulesSection" hidden></div>
 </aside>
 
 <script>
@@ -2691,8 +2744,58 @@
       var Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
       audioCtx = new Ctx();
+      loadTypewriter();
     }
     if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  // Real recordings of a Hermes Precisa 305 (CC0, BigSoundBank): one key
+  // strike and the end-of-line bell. Each is trimmed to where the sound
+  // starts and levelled by its own peak, so the volumes below are what you
+  // hear whatever the recording's level. The bell is kept well under the keys.
+  var KEY_LEVEL = 0.22, BELL_LEVEL = 0.05;
+  var typewriter = { key:null, bell:null };
+
+  function loadTypewriter(){
+    [['key', '/sounds/typewriter-key.mp3'], ['bell', '/sounds/typewriter-bell.mp3']].forEach(function(f){
+      fetch(f[1])
+        .then(function(r){ return r.arrayBuffer(); })
+        .then(function(buf){
+          return new Promise(function(ok, fail){ audioCtx.decodeAudioData(buf, ok, fail); });
+        })
+        .then(function(audio){
+          var data = audio.getChannelData(0), peak = 0, start = 0, i;
+          for (i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+          for (i = 0; i < data.length; i++){ if (Math.abs(data[i]) > peak * 0.2) break; }
+          start = Math.max(0, i / audio.sampleRate - 0.004);
+          typewriter[f[0]] = { buffer:audio, start:start, norm: peak > 0 ? 1 / peak : 1 };
+        })
+        .catch(function(){ /* no sound file: lines just type silently */ });
+    });
+  }
+
+  function playSample(s, level, length, rate){
+    var t = audioCtx.currentTime;
+    var src = audioCtx.createBufferSource();
+    src.buffer = s.buffer;
+    src.playbackRate.value = rate;
+    var gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(level * s.norm, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + length);
+    src.connect(gain).connect(audioCtx.destination);
+    src.start(t, s.start, length + 0.02);
+  }
+
+  // One key strike. Pitch and loudness wander a little each time, so it
+  // never sounds like one sample on a loop.
+  function playKeyStrike(){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running' || !typewriter.key) return;
+    playSample(typewriter.key, KEY_LEVEL * (0.7 + Math.random() * 0.35), 0.16, 0.93 + Math.random() * 0.14);
+  }
+
+  function playLineBell(){
+    if (!soundOn || !audioCtx || audioCtx.state !== 'running' || !typewriter.bell) return;
+    playSample(typewriter.bell, BELL_LEVEL, 1.2, 1);
   }
 
   function playClack(){
@@ -2712,21 +2815,6 @@
     gain.gain.value = 0.3;
     src.connect(filter).connect(gain).connect(audioCtx.destination);
     src.start(t);
-  }
-
-  function playBell(){
-    if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
-    var t = audioCtx.currentTime;
-    var osc = audioCtx.createOscillator();
-    osc.type = 'triangle';
-    osc.frequency.value = 520;
-    var gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.12, t + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-    osc.connect(gain).connect(audioCtx.destination);
-    osc.start(t);
-    osc.stop(t + 0.16);
   }
 
   // TIER_TABLE mirrors game_logic.apply_tier: (0,20,1) (20,40,2) (40,60,3) (60,80,4) (80+,5)
@@ -3130,18 +3218,28 @@
     addTranscriptRow(null, 'system', '— ' + text + ' —');
   }
 
-  // Dactilo (typewriter) clacks play only on the investigator's lines.
-  function typeLine(el, text, withSound, onDone){
+  // The investigator's lines type with a typewriter under them, at a
+  // typist's rhythm (a strike every 85-145 ms, never on a space) rather than
+  // one per character, which was 30 a second. A quiet bell ends the line.
+  // The player's own answer appears faster, silently.
+  function typeLine(el, text, isInvestigator, onDone){
     var i = 0;
-    var rate = withSound ? 32 : 16;
+    var rate = isInvestigator ? 32 : 16;
+    var nextStrike = 0;
     var handle = setInterval(function(){
       el.textContent = text.slice(0, i);
       scrollChat();
-      if (withSound && text[i-1] && text[i-1] !== ' ') playClack();
+      if (isInvestigator){
+        var now = Date.now();
+        if (now >= nextStrike && text[i-1] && text[i-1] !== ' '){
+          playKeyStrike();
+          nextStrike = now + 85 + Math.random() * 60;
+        }
+      }
       i++;
       if (i > text.length){
         clearInterval(handle);
-        if (withSound) playBell();
+        if (isInvestigator) playLineBell();
         if (onDone) onDone();
       }
     }, rate);
@@ -3458,12 +3556,11 @@
     drawer.hidden = false;
     drawerBackdrop.hidden = false;
     document.body.style.overflow = 'hidden';
+    var rules = section === 'rules';
+    document.getElementById('drawerTitle').textContent = rules ? 'How to play' : 'Case File';
+    document.getElementById('fileSection').hidden = rules;
+    document.getElementById('rulesSection').hidden = !rules;
     drawer.scrollTop = 0;
-    if (section === 'rules'){
-      document.getElementById('rulesSection').scrollIntoView({ block: 'start' });
-    }
-    // preventScroll: the close button is at the top, and focusing it would
-    // undo the jump to the rules section.
     document.getElementById('drawerClose').focus({ preventScroll: true });
   }
 
@@ -3683,12 +3780,13 @@
     fillRichList('drawerCompanyRules', (data.rules || []).map(itemLine));
     fillRichList('drawerConduct', (data.conduct || []).map(itemLine));
     fillRichList('drawerTable', (data.table || []).map(itemLine));
-    document.getElementById('drawerGoal').textContent = data.objective;
-    fillRichList('drawerRules', [
-      '**' + data.max_questions + ' questions.** Answer in your own words.',
-      'Contradicting yourself, dodging or admitting too much **pushes the meter up**.',
-      'Reach **' + line + '** and it’s fraud.'
-    ].concat(data.hint ? [data.hint] : []));
+    // "How to play" is the briefing's goal step itself, copied once it's
+    // filled in: same goal, limit, meter and hint, nothing new to read.
+    var howTo = document.getElementById('rulesSection');
+    howTo.innerHTML = '';
+    var goalStep = document.querySelector('#briefingScreen .step-panel[data-step="2"]').cloneNode(true);
+    goalStep.querySelectorAll('[id]').forEach(function(n){ n.removeAttribute('id'); });
+    while (goalStep.firstChild) howTo.appendChild(goalStep.firstChild);
 
     // The meter in the room: mark where the fraud line sits on it.
     document.getElementById('thresholdMark').style.left = Math.min(100, line) + '%';
@@ -3746,10 +3844,20 @@
     setThread(null);
     updateQuestionCount(1, caseData.max_questions);
     addDivider('Turn 1');
-    addTranscriptRow('Investigator', 'investigator', caseData.opening_question);
-    requestAnimationFrame(function(){
-      document.querySelector('.transcript-panel').scrollIntoView({ behavior:'smooth', block:'start' });
-    });
+
+    // She tosses the statement across, it lands, then she asks. The room
+    // stays in view for it; the answer box is brought on screen once her
+    // question has typed out.
+    room.classList.remove('sheet-in', 'sheet-toss');
+    void room.offsetWidth;
+    setTimeout(function(){
+      room.classList.add('sheet-in', 'sheet-toss');
+      playWhoosh(0.12);
+      setTimeout(function(){ playThud(0.3); }, 420);
+    }, 350);
+    setTimeout(function(){
+      addTranscriptRow('Investigator', 'investigator', caseData.opening_question, showChatPanel);
+    }, reducedMotion ? 0 : 1100);
   }
 
   function loadCase(){
@@ -3794,15 +3902,14 @@
   // straight to that resolution screen with placeholder text, so an ending can
   // be checked without playing a full interview. Use Replay to watch it again
   // with sound (browsers block audio until a user gesture).
-  var previewEnding = new URLSearchParams(location.search).get('ending');
-  if (previewEnding && VERDICT_LOOKS[previewEnding]){
-    // Placeholder content, clearly marked — only the layout is real here.
-    var previewRes = {
-      outcome: previewEnding, final_score: 86, threshold: 80,
+  // Placeholder content, clearly marked: only the layout is real here.
+  function previewResolution(outcome){
+    return {
+      outcome: outcome, final_score: 86, threshold: 80,
       interview_score: 67, verification_score_delta: 23,
       confidence: 'preview',
       reasoning: 'Preview text. In a real game this is the resolution pass\'s reasoning for the outcome, written from the interview record and the verification results below.',
-      aftermath: 'Preview of the ' + previewEnding + ' ending. In a real game this is the aftermath written by the resolution pass.',
+      aftermath: 'Preview of the ' + outcome + ' ending. In a real game this is the aftermath written by the resolution pass.',
       findings: [
         { tag:'CONTRADICTION', text:'Preview finding: a statement that conflicted with an earlier answer.', turn:3, points:15 },
         { tag:'EVASION', text:'Preview finding: a direct question that went unanswered.', turn:5, points:8 }
@@ -3812,8 +3919,59 @@
         { claim:'Preview excuse that turned out to be true.', status:'confirmed', basis:'Preview basis.', points:0 }
       ]
     };
-    populateResolution(previewRes);
+  }
+
+  var params = new URLSearchParams(location.search);
+  var previewEnding = params.get('ending');
+  if (previewEnding && VERDICT_LOOKS[previewEnding] && !params.has('demo')){
+    populateResolution(previewResolution(previewEnding));
     showScreen('resolution');
+  }
+
+  // Dev preview: /?demo plays the interview with scripted replies instead of
+  // the model, so the in-game animations can be watched without waiting on
+  // (or paying for) real turns. Each answer raises the meter a tier: waiting
+  // row, pinned evidence, shake and flash, the folder coming out, the door
+  // opening, and on the last answer the ending (?demo&ending=NOT_PROVEN etc.
+  // picks which; CAUGHT by default). The briefing and the opening toss are
+  // the real ones. Nothing here runs unless the URL asks for it.
+  if (params.has('demo')){
+    var DEMO_TURNS = [
+      { score:15, tag:'CONTRADICTION', pts:15, line:'[Demo] Her next question types out here. That answer was a contradiction: it\u2019s pinned to the board, and the room shakes.' },
+      { score:30, tag:'EVASION',       pts:15, line:'[Demo] Tier 2: she leans in. That one was a dodge, so the meter climbs again.' },
+      { score:50, tag:'ADMISSION',     pts:20, line:'[Demo] Tier 3: the case folder comes out onto the table.' },
+      { score:70, tag:'POLICY BREACH', pts:20, line:'[Demo] Tier 4: the folder slides toward you, and the door opens on an officer waiting outside.' },
+      { score:90, tag:'CONTRADICTION', pts:20, line:'[Demo] Over the line. That\u2019s enough for me. (The ending plays next.)', ended:true }
+    ];
+    var demoTurn = 0, demoReadyAt = 0;
+    var realFetch = window.fetch.bind(window);
+    window.fetch = function(url, opts){
+      if (url === '/api/turn'){
+        demoReadyAt = Date.now() + 3000;   // long enough to see the waiting row
+        return Promise.resolve(new Response(JSON.stringify({ job_id:'demo' })));
+      }
+      if (String(url).indexOf('/api/turn/') === 0){
+        if (Date.now() < demoReadyAt){
+          return Promise.resolve(new Response(JSON.stringify({ status:'pending' })));
+        }
+        var t = DEMO_TURNS[Math.min(demoTurn, DEMO_TURNS.length - 1)];
+        demoTurn += 1;
+        var outcome = VERDICT_LOOKS[previewEnding] ? previewEnding : 'CAUGHT';
+        return Promise.resolve(new Response(JSON.stringify({
+          blocked:false, question_count:demoTurn + 1, max_questions:8,
+          score:t.score, tier:1, thread:'demo',
+          next_line:t.line,
+          findings:[{ tag:t.tag, points:t.pts }],
+          ended:!!t.ended,
+          resolution: t.ended ? previewResolution(outcome) : null
+        })));
+      }
+      return realFetch(url, opts);
+    };
+    var banner = document.createElement('div');
+    banner.className = 'demo-banner';
+    banner.textContent = 'Demo mode: scripted replies, no AI. Send any answer; each one raises the meter a tier.';
+    document.body.prepend(banner);
   }
 })();
 </script>
