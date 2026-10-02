@@ -3801,8 +3801,9 @@
 
   // ---------- Briefing steps ----------
   var STEP_NAMES = ['The story', 'What to know', 'Your goal'];
-  var stepTabs = Array.prototype.slice.call(document.querySelectorAll('.step-tab'));
-  var stepPanels = Array.prototype.slice.call(document.querySelectorAll('.step-panel'));
+  // Scoped to the briefing: the How-to-play drawer reuses .step-panel too.
+  var stepTabs = Array.prototype.slice.call(document.querySelectorAll('#briefingScreen .step-tab'));
+  var stepPanels = Array.prototype.slice.call(document.querySelectorAll('#briefingScreen .step-panel'));
   var currentStep = 0;
 
   function goStep(n){
