@@ -51,7 +51,24 @@ from models import (
 
 load_dotenv()
 
-MODEL_NAME = os.environ.get("GAME_MODEL", "gemini-3.1-flash-lite")
+# Which API serves the pipeline: "gemini" (default), "groq" or "deepseek". Each provider
+# reads its own model settings, so switching back and forth is one variable.
+PROVIDER = os.environ.get("GAME_PROVIDER", "gemini").strip().lower()
+
+_DEFAULT_MODEL = {
+    "gemini": "gemini-3.1-flash-lite",
+    "groq": "openai/gpt-oss-120b",
+    "deepseek": "deepseek-flash",
+}
+_DEFAULT_FALLBACKS = {
+    "gemini": "gemini-3.5-flash-lite,gemini-3-flash-preview,gemini-2.5-flash-lite",
+    "groq": "openai/gpt-oss-20b",
+    "deepseek": "",
+}
+if PROVIDER not in _DEFAULT_MODEL:
+    raise ValueError(f"GAME_PROVIDER must be one of {sorted(_DEFAULT_MODEL)}, got {PROVIDER!r}")
+
+MODEL_NAME = os.environ.get("GAME_MODEL", _DEFAULT_MODEL[PROVIDER])
 
 
 # A hard ceiling on generation, not a style preference. An undescribed
@@ -64,12 +81,11 @@ MAX_OUTPUT_TOKENS = 2048
 
 
 # Tried in order when the main model fails outright: its daily free quota runs
-# out (429), Google is overloaded (503), or the name stops existing. Each has
-# its own quota, so a game keeps going instead of ending on an error screen.
+# out (429), the provider is overloaded (503), or the name stops existing. Each
+# has its own quota, so a game keeps going instead of ending on an error screen.
 FALLBACK_MODELS = [
     m.strip() for m in os.environ.get(
-        "GAME_FALLBACK_MODELS",
-        "gemini-3.5-flash-lite,gemini-3-flash-preview,gemini-2.5-flash-lite",
+        "GAME_FALLBACK_MODELS", _DEFAULT_FALLBACKS[PROVIDER],
     ).split(",") if m.strip() and m.strip() != MODEL_NAME
 ]
 
@@ -77,22 +93,25 @@ FALLBACK_MODELS = [
 # output cap: at 2048 their structured answers came back cut off mid-JSON.
 FALLBACK_MAX_OUTPUT_TOKENS = 8192
 
+GROQ_MAX_OUTPUT_TOKENS = int(os.environ.get("GROQ_MAX_OUTPUT_TOKENS", "2048"))
+
 # Seconds the main model gets before the backup is tried instead.
 MAIN_MODEL_TIMEOUT_S = 20
 
 
-class _BackupModel(ChatGoogleGenerativeAI):
+class _AnnounceFallback:
     """A fallback that says so when it is used. A listener attached with
     with_listeners was dropped once with_structured_output wrapped the model,
     so the switch happened silently; announcing from inside the call cannot
     be lost that way."""
 
     def _generate(self, *args, **kwargs):
-        print(f"  [fallback] main model failed, using {self.model}")
+        name = getattr(self, "model", None) or getattr(self, "model_name", "?")
+        print(f"  [fallback] main model failed, using {name}")
         return super()._generate(*args, **kwargs)
 
 
-class _MainModel(ChatGoogleGenerativeAI):
+class _ExplainFailure:
     """The main model, saying why it failed before a backup takes over. The
     fallback chain catches the error, so without this a log shows that the
     main model failed and never what it failed with."""
@@ -101,7 +120,7 @@ class _MainModel(ChatGoogleGenerativeAI):
         try:
             return super()._generate(*args, **kwargs)
         except Exception as exc:
-            code = re.search(r"\b(4\d\d|5\d\d)\b", str(exc))
+            code = re.search(r"(4\d\d|5\d\d)", str(exc))
             quota = re.search(r"quotaId'?:\s*'?([A-Za-z]+)", str(exc))
             print(
                 f"  [main model error] {type(exc).__name__}"
@@ -112,11 +131,118 @@ class _MainModel(ChatGoogleGenerativeAI):
             raise
 
 
+class _BackupModel(_AnnounceFallback, ChatGoogleGenerativeAI):
+    pass
+
+
+class _MainModel(_ExplainFailure, ChatGoogleGenerativeAI):
+    pass
+
+
+def _groq_llm(temperature: float, max_output_tokens: int):
+    # Imported here so a Gemini-only deploy doesn't need the package.
+    from langchain_groq import ChatGroq
+
+    class _GroqJson(ChatGroq):
+        # Tool calling is LangChain's default, and gpt-oss answered it by
+        # calling a tool under a made-up name (400 tool_use_failed). Groq's
+        # JSON-schema mode leaves no tool to get wrong. Non-strict, gpt-oss-20b
+        # sometimes echoed the schema back instead of filling it; strict mode
+        # (gpt-oss only on Groq) constrains decoding. qwen3.8-27b failed both
+        # ways (bad tool calls; {"": ""} in JSON mode) and is not offered.
+        def with_structured_output(self, schema, *, method="json_schema", **kwargs):
+            kwargs.setdefault("strict", self.model_name.startswith("openai/gpt-oss"))
+            return super().with_structured_output(schema, method=method, **kwargs)
+
+    class _GroqMain(_ExplainFailure, _GroqJson):
+        pass
+
+    class _GroqBackup(_AnnounceFallback, _GroqJson):
+        pass
+
+    # Every Groq model offered here reasons before answering, and the reasoning
+    # counts against max_tokens: at 2048 gpt-oss-20b's Lead came back empty
+    # (json_validate_failed). Low effort keeps gpt-oss close to the non-thinking
+    # Gemini it stands in for, and spends less of Groq's per-minute token quota.
+    # Groq counts max_tokens against the free tier's 8000 tokens/minute up
+    # front, so a request whose prompt plus cap exceeds 8000 is refused
+    # outright (413) however short its answer would have been. Prompts grow
+    # with the transcript; 4096 was refused by turn 2. A paid tier can raise
+    # GROQ_MAX_OUTPUT_TOKENS.
+    def extra(model):
+        return {"reasoning_effort": "low"} if model.startswith("openai/gpt-oss") else {}
+
+    main = _GroqMain(
+        model=MODEL_NAME,
+        temperature=temperature,
+        max_tokens=GROQ_MAX_OUTPUT_TOKENS,
+        **extra(MODEL_NAME),
+        max_retries=0 if FALLBACK_MODELS else 2,
+        timeout=MAIN_MODEL_TIMEOUT_S,
+    )
+    if not FALLBACK_MODELS:
+        return main
+    backups = [
+        _GroqBackup(
+            model=m,
+            temperature=temperature,
+            max_tokens=GROQ_MAX_OUTPUT_TOKENS,
+            **extra(m),
+        )
+        for m in FALLBACK_MODELS
+    ]
+    return main.with_fallbacks(backups)
+
+
+def _deepseek_llm(temperature: float, max_output_tokens: int):
+    # DeepSeek speaks the OpenAI API. Imported here so other deploys don't
+    # need the package.
+    from langchain_core.output_parsers.openai_tools import PydanticToolsParser
+    from langchain_core.utils.function_calling import convert_to_openai_tool
+    from langchain_openai import ChatOpenAI
+
+    class _DeepSeek(_ExplainFailure, ChatOpenAI):
+        # DeepSeek refuses json_schema response formats ("unavailable now")
+        # and its JSON mode ignores the schema, so this is tool calling. Every
+        # field is marked required in the tool sent: DeepSeek skipped the
+        # Lead's defaulted fields (what_was_asked, what_they_offered,
+        # was_it_given) that Gemini fills. Not DeepSeek's strict mode, which
+        # does the same thing but appended a stray "]}" to the checker's JSON
+        # three runs in a row. A reply that doesn't parse raises, so the
+        # caller's retry gets another try instead of carrying on with None.
+        def with_structured_output(self, schema, **kwargs):
+            tool = convert_to_openai_tool(schema)
+            params = tool["function"]["parameters"]
+            for obj in [params, *params.get("$defs", {}).values()]:
+                if "properties" in obj:
+                    obj["required"] = list(obj["properties"])
+            llm = self.bind_tools(
+                [tool], tool_choice=tool["function"]["name"], parallel_tool_calls=False,
+            )
+            return llm | PydanticToolsParser(tools=[schema], first_tool_only=True)
+
+    return _DeepSeek(
+        model=MODEL_NAME,
+        base_url="https://api.deepseek.com",
+        api_key=os.environ.get("DEEPSEEK_API_KEY"),
+        temperature=temperature,
+        max_tokens=max_output_tokens,
+        timeout=MAIN_MODEL_TIMEOUT_S * 3,
+        # Thinking is on by default and ignores temperature; off, the model
+        # answers directly like the Flash-Lite it is compared against.
+        extra_body={"thinking": {"type": "disabled"}},
+    )
+
+
 # Built once per setting and reused: every call used to construct the main
 # model and all three backups from scratch — 1.2s a turn locally, 6-12s on
 # Render's free CPU, logged there as "our code".
 @lru_cache(maxsize=None)
 def get_llm(temperature: float = 0.3, max_output_tokens: int = MAX_OUTPUT_TOKENS):
+    if PROVIDER == "groq":
+        return _groq_llm(temperature, max_output_tokens)
+    if PROVIDER == "deepseek":
+        return _deepseek_llm(temperature, max_output_tokens)
     if not FALLBACK_MODELS:
         return ChatGoogleGenerativeAI(
             model=MODEL_NAME,
