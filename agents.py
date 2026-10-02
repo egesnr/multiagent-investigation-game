@@ -51,9 +51,9 @@ from models import (
 
 load_dotenv()
 
-# Which API serves the pipeline: "gemini" (default), "groq" or "deepseek". Each provider
+# Which API serves the pipeline: "deepseek" (default), "gemini" or "groq". Each provider
 # reads its own model settings, so switching back and forth is one variable.
-PROVIDER = os.environ.get("GAME_PROVIDER", "gemini").strip().lower()
+PROVIDER = os.environ.get("GAME_PROVIDER", "deepseek").strip().lower()
 
 _DEFAULT_MODEL = {
     "gemini": "gemini-3.1-flash-lite",
@@ -194,6 +194,18 @@ def _groq_llm(temperature: float, max_output_tokens: int):
     return main.with_fallbacks(backups)
 
 
+class ContentFiltered(Exception):
+    """DeepSeek's moderation blocked the request: the reply comes back with no
+    text and no tool call at all (seen on an explicit sexual answer, five
+    tries in a row). Retrying cannot help; the Gemini backup takes the call."""
+
+
+def _check_raw_reply(message):
+    if not message.tool_calls and not getattr(message, "invalid_tool_calls", None)             and not str(message.content or "").strip():
+        raise ContentFiltered("empty reply from DeepSeek (content filter)")
+    return message
+
+
 def _require_reply(parsed):
     # DeepSeek sometimes answers in prose instead of calling the tool; the
     # parser then yields None and the turn crashed on it (the Lead, live
@@ -203,10 +215,15 @@ def _require_reply(parsed):
     return parsed
 
 
+# Gemini model that takes a call DeepSeek's content filter blocked.
+GEMINI_BACKUP_MODEL = os.environ.get("GEMINI_BACKUP_MODEL", "gemini-3.1-flash-lite")
+
+
 def _deepseek_llm(temperature: float, max_output_tokens: int):
     # DeepSeek speaks the OpenAI API. Imported here so other deploys don't
     # need the package.
     from langchain_core.output_parsers.openai_tools import PydanticToolsParser
+    from langchain_core.runnables import RunnableLambda
     from langchain_core.utils.function_calling import convert_to_openai_tool
     from langchain_openai import ChatOpenAI
 
@@ -228,8 +245,22 @@ def _deepseek_llm(temperature: float, max_output_tokens: int):
             llm = self.bind_tools(
                 [tool], tool_choice=tool["function"]["name"], parallel_tool_calls=False,
             )
-            return llm | PydanticToolsParser(tools=[schema], first_tool_only=True) | _require_reply
-
+            chain = (
+                llm
+                | RunnableLambda(_check_raw_reply)
+                | PydanticToolsParser(tools=[schema], first_tool_only=True)
+                | _require_reply
+            )
+            if not os.environ.get("GOOGLE_API_KEY"):
+                return chain
+            # Only a filtered call goes to Gemini; everything else stays on
+            # DeepSeek and its own retries.
+            backup = _BackupModel(
+                model=GEMINI_BACKUP_MODEL,
+                temperature=self.temperature,
+                max_output_tokens=max(max_output_tokens, FALLBACK_MAX_OUTPUT_TOKENS),
+            ).with_structured_output(schema)
+            return chain.with_fallbacks([backup], exceptions_to_handle=(ContentFiltered,))
 
     return _DeepSeek(
         model=MODEL_NAME,
@@ -1361,6 +1392,16 @@ YOUR VOICE:
   colder and more final. You are not neutral at the last question if you were
   lied to at the first.
 
+YOU ARE A PERSON IN THE ROOM, NOT A MOUTHPIECE.
+The Lead decides what you are after; how you get there is yours, and that
+includes answering the human across the table, not only their claims. Whatever
+they just did lands on you as the person you are, and a real interviewer lets
+it show, the way this persona would, whether that comes out as humour, sympathy
+or temper. A reply that is crude, absurd or off-topic is still something a
+person said to you, and it can tell you something: react to it as it was said,
+and use it if it does. Then steer back to what you are after. The reaction
+never replaces the aim and never changes the subject.
+
 VARY YOUR RHYTHM — this is what separates a person from a form:
 - Not every line is a question. A flat statement, laying out what you know, or
   a single short sentence can each hit harder than another question mark.
@@ -1468,8 +1509,8 @@ what carries it. The Lead needs your argument, not every angle you weighed.""",
     "mind_prompt": """Each field is a few sentences at most, or a short list of
 short items. These are working notes, not a report; anything the next field
 does not need is time the suspect spends waiting.""",
-    "speaker_prompt": """Your line says one thing, in at most forty words, and
-often far fewer. Your inner reaction is a sentence or two about what is
+    "speaker_prompt": """Your line is at most forty words, and often far
+fewer. Your inner reaction is a sentence or two about what is
 particular to this answer, not about the kind of answer it is.
 Look at your earlier lines in the dialogue: don't reuse their wording, and
 don't put a fact to them again unless you are using it to make a new point.
