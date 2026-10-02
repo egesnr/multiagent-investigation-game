@@ -1451,6 +1451,38 @@ Next line:"""
     ),
 ])
 
+
+# DeepSeek add-on. The prompts above are shared by every provider; these notes
+# are appended only when DeepSeek runs. Measured against Gemini on the same
+# script, DeepSeek wrote 3-6x more in the war room and twice as much in the
+# Lead without choosing better moves, spoke lines of 50-80 words against the
+# Speaker's "well under fifty", and twice stated things nothing supported.
+# Kept separate so Gemini's prompts stay exactly as tuned.
+_DEEPSEEK_ADDON = {
+    "evidence_checker_prompt": """Keep each reasoning step to one or two
+sentences. The status is what gets used; the working only has to justify it.""",
+    "skeptic_prompt": """Each field is two or three sentences: the point and
+what carries it. The Lead needs your argument, not every angle you weighed.""",
+    "alternative_prompt": """Each field is two or three sentences: the point and
+what carries it. The Lead needs your argument, not every angle you weighed.""",
+    "mind_prompt": """Each field is a few sentences at most, or a short list of
+short items. These are working notes, not a report; anything the next field
+does not need is time the suspect spends waiting.""",
+    "speaker_prompt": """Your line says one thing, in at most forty words, and
+often far fewer. Your inner reaction is a sentence or two about what is
+particular to this answer, not about the kind of answer it is.
+Look at your earlier lines in the dialogue: don't reuse their wording, and
+don't put a fact to them again unless you are using it to make a new point.
+Anything you say about the conversation itself, such as how often you have
+asked something, must match the dialogue above.""",
+}
+if PROVIDER == "deepseek":
+    for _name, _note in _DEEPSEEK_ADDON.items():
+        globals()[_name] = ChatPromptTemplate.from_messages(
+            [*globals()[_name].messages, ("system", _note)]
+        )
+
+
 def run_speaker(
     case: CaseFile,
     move: InvestigatorMind,
