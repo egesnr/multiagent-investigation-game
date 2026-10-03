@@ -220,10 +220,11 @@ def _process_turn(session_id: str, session: dict, answer: str, job_id: str) -> N
 
     session["last_question"] = next_line
 
-    ended = (
-        state.question_count >= state.max_questions
-        or case_decisively_resolved(state)
-    )
+    # decided_in_room: the arrest was already certain before the questions
+    # ran out. The verdict screen tells that story ("caught in the room")
+    # instead of the score-after-the-records-check one.
+    decided_in_room = case_decisively_resolved(state)
+    ended = state.question_count >= state.max_questions or decided_in_room
 
     result = {
         "blocked": False,
@@ -242,6 +243,7 @@ def _process_turn(session_id: str, session: dict, answer: str, job_id: str) -> N
         report = run_resolution(state)
         result["resolution"] = {
             "outcome": report.outcome.value,
+            "decided_in_room": decided_in_room,
             "aftermath": report.aftermath,
             "reasoning": report.reasoning,
             "confidence": report.confidence,
