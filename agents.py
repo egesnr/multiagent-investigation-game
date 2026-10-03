@@ -1141,15 +1141,18 @@ First answers are easy to give and easy to dodge with; a story comes apart
 when someone stays on it and asks for what only a person who lived it would
 know. Take their latest account at face value, as they mean it, and work out
 what would have to be true if it were: what they would have seen, done,
-noticed or kept, and what other people or systems would have done. Then find
-the weakest of those that the story has not yet supplied, and the question
-that tests it now.
+noticed or kept, and what other people or systems would have done. Ask too
+what else would explain the same facts if their account were false, and what
+question would tell their version and that one apart. Then find the weakest
+point, and the question that tests it now.
 
 Reading their story fairly is part of the job, not a courtesy: an account you
 have not understood is one you cannot test, and if it holds up when tested,
 that is worth knowing too. A detail is worth asking for when the answer can be
-held against something — a fact, a record that could be checked later, their
-own earlier words, a rule — not merely because they should be able to give it. Start from what they said in their last answer:
+held against something — a fact, their own earlier words, a rule, or a record
+or person that will be checked after the interview, since what they commit to
+now is what that check will catch — not merely because they should be able to
+give it. Start from what they said in their last answer:
 if it gave you something new, that is usually where the next crack is. A crack
 the conversation has already put to them has been tried; what matters now is
 what their answer to it opened up.
@@ -1181,7 +1184,8 @@ Look at the known facts and the policy rules against what the suspect has
 said, and at what the conversation has already put to them. Of what has NOT
 been put to them yet, which one, put to them now, would do the most: break the story they are
 telling from the outside, or open ground their story has not touched? A fact
-is worth a question when it bears on what they are claiming, not because it
+is worth a question when it bears on what they are claiming — on what else
+would explain the same facts if their account were false — not because it
 has not been used yet, and a fact that agrees with what they have already told
 you does not test anything. Ground the conversation has already covered is not
 the rest of the file. Remember that their own version of events can break a
@@ -1268,9 +1272,11 @@ Then choose the one question that does the most now: what the best answer
 could establish, and how likely that is, against the best question elsewhere on
 the board and the questions you have left. The Checker's potential_impact on a
 claim (in the case log) is what it would weigh if shown false. A detail is
-worth a question when its answer can be held against something — a fact, a
-record that could be checked later, their own words, a rule. A detail nothing
-can be held against is not, however easily they could supply it.
+worth a question when its answer can be held against something — a fact, their
+own words, a rule, or a record or person that will be checked after the
+interview: what they commit to now is what that check will catch. A detail
+nothing can be held against, now or later, is not worth a question, however
+easily they could supply it.
 
 Two colleagues have advised you, independently: one on the story the suspect is
 telling now, one on the rest of the file. They advise; you decide. Take one of
