@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
 <title>The Box</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Courier+Prime:wght@400;700&family=Special+Elite&family=Arvo:wght@400;700&display=swap">
@@ -693,93 +693,114 @@
     75%{ transform:translate(-2px,1px); }
     100%{ transform:translate(0,0); }
   }
-  .score-readout{
-    margin-top:18px;
-    font-family:'IBM Plex Mono', monospace;
-    font-variant-numeric: tabular-nums;
-    font-size:1rem;
-    color:#3a3120;
+  /* ---------- Verdict: short, scannable, modern ---------- */
+  .verdict{ width:100%; max-width:40rem; margin-top:26px; text-align:center; }
+  .filepage .verdict-head{
+    font-family:'Arvo', serif;
+    font-weight:700;
+    font-size:clamp(1.4rem, 3.6vw, 1.9rem);
+    line-height:1.25;
+    letter-spacing:0;
+    text-transform:none;
+    color:#1c1710;
+    margin:0 0 8px;
   }
-  .score-readout b{ font-size:1.3rem; }
-  .aftermath{
+  .filepage .verdict-sub{ margin:0 auto; max-width:34rem; font-size:1rem; line-height:1.55; color:#3a3120; }
+
+  .score-card{
+    width:100%; max-width:40rem;
     margin-top:22px;
-    max-width:56ch;
-    font-size:0.92rem;
-    line-height:1.65;
-    color:#2a2317;
+    background:#1c1710;
+    color:#f1e8d5;
+    border-radius:4px;
+    padding:16px 18px 18px;
     text-align:left;
-    background:#fff6;
-    border:1px solid #6b5f45;
-    padding:14px 16px;
   }
-  .case-report{
-    margin-top:24px;
-    width:100%;
-    max-width:40rem;
-    text-align:left;
-    display:flex;
-    flex-direction:column;
-    gap:20px;
+  .sc-top{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px; }
+  .sc-label{ font-family:'Oswald', sans-serif; font-size:0.85rem; letter-spacing:0.1em; text-transform:uppercase; color:#c9b79a; }
+  .sc-num{ font-family:'IBM Plex Mono', monospace; font-variant-numeric:tabular-nums; color:#c9b79a; }
+  .sc-num b{ font-family:'Arvo', serif; font-size:1.8rem; color:#f1e8d5; }
+  .sc-meter{ position:relative; height:16px; background:#0f0c08; border:1px solid #3d3428; border-radius:3px; margin-bottom:28px; }
+  .sc-fill{ position:absolute; left:0; top:0; bottom:0; width:2%; border-radius:2px 0 0 2px; background:linear-gradient(90deg, var(--good), var(--accent-amber)); }
+  .sc-fill.over{ background:linear-gradient(90deg, var(--accent-amber), #e0564a); }
+  .sc-line{ position:absolute; top:-6px; bottom:-6px; width:3px; margin-left:-1px; background:#e0564a; }
+  .sc-line span{ position:absolute; top:100%; left:50%; transform:translateX(-50%); margin-top:4px; font-family:'Oswald', sans-serif; font-size:0.75rem; letter-spacing:0.08em; text-transform:uppercase; color:#e0564a; }
+  .sc-parts{ display:flex; gap:8px; flex-wrap:wrap; }
+  .sc-part{
+    display:inline-flex; gap:8px; align-items:baseline;
+    border:1px solid #3d3428; border-radius:999px;
+    padding:4px 12px;
+    font-size:0.85rem; color:#c9b79a;
   }
-  .cr-block{ border-top:1px dashed #6b5f45; padding-top:12px; }
-  .cr-block h3, .aftermath-head{ display:flex; align-items:center; gap:10px; }
-  .filepage .aftermath-head{ margin:26px 0 0; width:100%; max-width:40rem; }
-  .aftermath{ max-width:40rem; width:100%; margin-top:8px; }
-  .cr-confidence{
-    font-family:'Special Elite', monospace;
-    font-size:0.72rem;
+  .sc-part b{ font-family:'IBM Plex Mono', monospace; color:#f1e8d5; }
+
+  .report-block{ width:100%; max-width:40rem; margin-top:24px; text-align:left; }
+  .filepage .report-block h3{ font-size:0.85rem; margin:0 0 10px; }
+  .hit-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .filepage .hit{
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    gap:4px 12px;
+    align-items:baseline;
+    margin:0;
+    background:#fbf6ea;
+    border:1px solid #b9a77f;
+    border-radius:3px;
+    padding:10px 12px;
+    cursor:pointer;
+  }
+  .hit:hover{ border-color:#6b5f45; }
+  .hit-tag{
+    font-family:'Oswald', sans-serif;
+    font-size:0.75rem;
     letter-spacing:0.06em;
     text-transform:uppercase;
-    color:#5a4f3a;
-    border:1.5px solid #6b5f45;
     border-radius:3px;
-    padding:1px 7px;
-  }
-  .cr-confidence:empty{ display:none; }
-  .filepage .cr-reasoning{ margin:0; font-size:0.92rem; line-height:1.65; }
-  .cr-score{
-    border-collapse:collapse;
-    font-family:'IBM Plex Mono', monospace;
-    font-variant-numeric:tabular-nums;
-    font-size:0.85rem;
-    color:#2a2317;
-    min-width:min(100%, 340px);
-  }
-  .cr-score td{ padding:4px 0; }
-  .cr-score td:last-child{ text-align:right; padding-left:24px; }
-  .cr-score .cr-total td{ border-top:1px solid #6b5f45; padding-top:7px; font-weight:600; }
-  .cr-score .cr-total span{ font-weight:400; color:#5a4f3a; }
-  .cr-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; }
-  .filepage .cr-list li{
-    margin:0;
-    display:grid;
-    grid-template-columns: 7.5rem 1fr auto;
-    gap:2px 12px;
-    align-items:baseline;
-    font-size:0.86rem;
-    line-height:1.5;
-  }
-  .cr-tag{
-    font-family:'Oswald', sans-serif;
-    font-size:0.62rem;
-    letter-spacing:0.1em;
-    text-transform:uppercase;
-    color:var(--accent-oxblood);
-  }
-  .cr-tag.muted{ color:#6b5f45; }
-  .cr-pts{
-    font-family:'IBM Plex Mono', monospace;
-    font-variant-numeric:tabular-nums;
-    font-size:0.8rem;
-    color:#3a3120;
+    padding:2px 7px;
     white-space:nowrap;
   }
-  .cr-sub{ grid-column:2 / -1; font-size:0.78rem; color:#5a4f3a; }
-  @media (max-width:520px){
-    .filepage .cr-list li{ grid-template-columns: 1fr auto; }
-    .cr-list .cr-tag{ grid-column:1 / -1; }
-    .cr-sub{ grid-column:1 / -1; }
+  .hit-tag.bad{ background:var(--accent-oxblood); color:#fbf6ea; }
+  .hit-tag.good{ background:var(--good); color:#fbf6ea; }
+  .hit-tag.flat{ background:#d9cfbd; color:#3a3120; }
+  .hit-text{
+    font-size:0.92rem; line-height:1.45; color:#1c1710;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
   }
+  .hit.open .hit-text{ display:block; }
+  .hit-note{ font-family:'IBM Plex Mono', monospace; font-size:0.8rem; color:#6b5f45; white-space:nowrap; }
+  .hit-more{ grid-column:2 / -1; font-size:0.85rem; line-height:1.45; color:#5a4f3a; }
+  @media (max-width:520px){
+    .filepage .hit{ grid-template-columns:1fr auto; }
+    .hit-text, .hit-more{ grid-column:1 / -1; }
+  }
+
+  .full-report{ width:100%; max-width:40rem; margin-top:22px; text-align:left; }
+  .full-report summary{
+    cursor:pointer;
+    font-family:'Oswald', sans-serif;
+    font-size:0.95rem;
+    letter-spacing:0.04em;
+    color:#5a4f3a;
+    padding:8px 0;
+  }
+  .full-report summary:hover{ color:#1c1710; }
+  .filepage .full-report p{ margin:6px 0 12px; font-size:0.92rem; line-height:1.6; color:#2a2317; }
+  .filepage .full-report h4{ margin:14px 0 0; font-family:'Oswald', sans-serif; font-size:0.8rem; letter-spacing:0.1em; text-transform:uppercase; color:#6b5f45; }
+
+  /* the end of the interview: the answer box gives way to this */
+  .t-end-row{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    padding:12px 14px;
+    border-top:1px solid var(--console-border);
+    background:#181a1e;
+    font-family:'Oswald', sans-serif;
+    font-size:0.95rem;
+    letter-spacing:0.04em;
+    color:#dfe2e6;
+  }
+  .t-end-row .begin-btn{ background:var(--accent-amber); color:#1c1710; }
+  .t-end-row .begin-btn:hover{ background:#d99a4d; }
+
   .cop-lights{
     position:absolute; inset:0;
     pointer-events:none;
@@ -1784,6 +1805,87 @@
   .t-input-row .send-btn:hover{ color:#e7e9eb; border-color:#5a616a; }
   .t-input-row .send-btn:disabled{ opacity:0.5; cursor:default; }
 
+  /* ---------- Phones: the interview as one screen ----------
+     Room pinned at the top (always visible, animations included), a thin
+     status strip, the conversation scrolling in the middle, the answer box
+     pinned at the bottom. The whole thing is the height of what's visible,
+     so when the keyboard opens it all fits above it. */
+  @media (max-width:700px){
+    body{ padding:16px 12px 40px; }
+    body[data-screen="interview"]{ padding:0; overflow:hidden; }
+    body[data-screen="interview"] .wrap{
+      height:calc(var(--app-h, 100dvh) - var(--banner-h, 0px));
+      gap:0;
+      max-width:none;
+    }
+    body[data-screen="interview"] .demo-banner{ margin:0; padding:4px 10px; font-size:0.72rem; }
+    body[data-screen="interview"] header.page-head{
+      flex:none;
+      padding:8px 10px;
+      gap:8px;
+      flex-wrap:nowrap;
+      align-items:center;
+    }
+    body[data-screen="interview"] header.page-head .titles{ display:none; }
+    body[data-screen="interview"] .head-actions{ width:100%; flex-wrap:nowrap; gap:6px; }
+    body[data-screen="interview"] .screen-toggle{ flex:1; min-height:36px; padding:0 6px; font-size:0.72rem; letter-spacing:0.03em; }
+
+    #interviewScreen:not([hidden]){ flex:1; min-height:0; display:flex; }
+    .scene-grid{ display:flex; flex-direction:column; width:100%; gap:0; min-height:0; }
+
+    .room-frame{
+      flex:none;
+      aspect-ratio:auto;
+      height:min(30vh, 56vw);
+      border-radius:0;
+      border-left:none; border-right:none;
+    }
+    .hud-caseline, .hud-thread{ font-size:0.55rem; }
+
+    /* the panel becomes a strip: question count and the meter side by side */
+    .dossier{
+      flex:none;
+      align-self:stretch;
+      flex-direction:row;
+      flex-wrap:wrap;
+      gap:6px;
+      padding:6px;
+      border-radius:0;
+      border-left:none; border-right:none;
+    }
+    .d-sec{ flex:1 1 40%; padding:6px 8px 8px; }
+    .d-head{ margin-bottom:6px; }
+    .dossier h2{ font-size:0.66rem; }
+    .d-val{ font-size:0.72rem; }
+    .d-val b{ font-size:0.9rem; }
+    .turn-pips{ gap:4px; }
+    .turn-pips i{ width:9px; height:9px; }
+    .h-meter{ height:10px; margin-bottom:14px; }
+    .threshold-mark span{ font-size:0.55rem; }
+    .tier-label{ display:none; }
+    .board-sec{ display:none; }
+    .coach{ flex:1 1 100%; font-size:0.78rem; padding:8px 10px; }
+    .coach p{ margin-bottom:6px; }
+
+    .transcript-panel{ flex:1; min-height:0; border-radius:0; border-left:none; border-right:none; }
+    .transcript-panel .t-head{ display:none; }
+    .t-scroll{ flex:1; min-height:0; max-height:none; }
+    .t-row{ padding:6px 12px 8px 10px; }
+    .t-row .txt{ font-size:0.92rem; }
+    .t-input-row{ padding:8px 10px; }
+    /* 16px: iOS zooms the page when focusing anything smaller */
+    .t-input-row input{ font-size:16px; padding:10px; }
+    .t-input-row .send-btn{ padding:0 14px; }
+    .t-end-row{ padding:10px; }
+  }
+  /* phone with the keyboard open: a smaller room, a tighter strip */
+  @media (max-width:700px) and (max-height:600px){
+    .room-frame{ height:24vh; }
+    .d-sec{ padding:4px 8px 6px; }
+    .d-head{ margin-bottom:4px; }
+    .turn-pips{ display:none; }
+  }
+
   @media (prefers-reduced-motion: reduce){
     .room-frame.shake{ animation:none; }
     .investigator, .r-file, .r-door, .r-hall, .r-officer{ transition:none; }
@@ -2071,6 +2173,12 @@
       <div class="t-input-row">
         <input type="text" id="answerInput" placeholder="Type your answer, in your own words…" autocomplete="off" />
         <button class="send-btn" id="sendAnswerBtn">Send</button>
+      </div>
+      <!-- When the interview ends, this replaces the answer box: the player
+           reads her last line, then chooses to see the verdict. -->
+      <div class="t-end-row" id="endRow" hidden>
+        <span>The interview is over.</span>
+        <button class="begin-btn" id="verdictBtn">See the verdict →</button>
       </div>
     </div>
   </div>
@@ -2657,40 +2765,45 @@
       <button class="finale-replay" id="replayBtn" type="button">&#8634; Replay</button>
 
       <div class="verdict-stamp" id="verdictStamp">&mdash;</div>
-      <div class="score-readout reveal" style="--i:0">Final case score: <b id="finalScore">0</b> / <span id="finalThreshold">80</span></div>
-
-      <!-- Why the case ended this way: the resolution pass's own reasoning,
-           the score it came from, and the record behind it. -->
-      <div class="case-report reveal" id="caseReport" style="--i:1">
-        <section class="cr-block">
-          <h3>Finding <span class="cr-confidence" id="crConfidence"></span></h3>
-          <p class="cr-reasoning" id="crReasoning"></p>
-        </section>
-
-        <section class="cr-block">
-          <h3>How the score was reached</h3>
-          <table class="cr-score">
-            <tr><td>Interview findings</td><td id="crInterview">0</td></tr>
-            <tr><td>Checked after the interview</td><td id="crVerify">+0</td></tr>
-            <tr id="crRefundRow" hidden><td>Excuses that checked out</td><td id="crRefund">0</td></tr>
-            <tr class="cr-total"><td>Final score <span id="crThresholdNote"></span></td><td id="crFinal">0</td></tr>
-          </table>
-        </section>
-
-        <section class="cr-block" id="crFindingsBlock">
-          <h3>What the interview established</h3>
-          <ol class="cr-list" id="crFindings"></ol>
-        </section>
-
-        <section class="cr-block" id="crVerifyBlock">
-          <h3>What the records showed</h3>
-          <ol class="cr-list" id="crVerifications"></ol>
-        </section>
+      <!-- The verdict, short: one line that says what happened, what caught
+           you, and (only when the case went to the records check) the
+           score. The model's long reasoning and aftermath stay folded
+           under "Read the full report". -->
+      <div class="verdict reveal" style="--i:0">
+        <h3 class="verdict-head" id="verdictHead">&mdash;</h3>
+        <p class="verdict-sub" id="verdictSub"></p>
       </div>
 
-      <h3 class="aftermath-head reveal" style="--i:2">Aftermath</h3>
-      <div class="aftermath reveal" id="aftermathText" style="--i:2">&mdash;</div>
-      <div class="resolution-actions reveal" style="--i:3">
+      <div class="score-card reveal" id="scoreCard" style="--i:1">
+        <div class="sc-top">
+          <span class="sc-label">Case against you</span>
+          <span class="sc-num"><b id="finalScore">0</b> / <span id="finalThreshold">80</span></span>
+        </div>
+        <div class="sc-meter">
+          <div class="sc-fill" id="scFill"></div>
+          <div class="sc-line" id="scLine"><span>fraud</span></div>
+        </div>
+        <div class="sc-parts" id="scParts"></div>
+      </div>
+
+      <section class="report-block reveal" id="crFindingsBlock" style="--i:2">
+        <h3 id="crFindingsHead">What caught you</h3>
+        <ul class="hit-list" id="crFindings"></ul>
+      </section>
+
+      <section class="report-block reveal" id="crVerifyBlock" style="--i:2">
+        <h3>What the records showed</h3>
+        <ul class="hit-list" id="crVerifications"></ul>
+      </section>
+
+      <details class="full-report reveal" id="fullReport" style="--i:3">
+        <summary>Read the full report</summary>
+        <p id="crReasoning"></p>
+        <h4>Afterwards</h4>
+        <p id="aftermathText"></p>
+      </details>
+
+      <div class="resolution-actions reveal" style="--i:4">
         <button class="begin-btn" id="restartBtn">↻ Run another interview</button>
         <button class="link-btn" id="backToFileBtn">← Review case file</button>
       </div>
@@ -3304,14 +3417,14 @@
 
   function setSendingUI(isSending){
     var input = document.getElementById('answerInput');
-    input.disabled = isSending;
+    input.disabled = isSending || interviewOver;
     input.placeholder = isSending ? 'Wait for her next question…' : 'Type your answer, in your own words…';
     var btn = document.getElementById('sendAnswerBtn');
-    btn.disabled = isSending;
+    btn.disabled = isSending || interviewOver;
     btn.textContent = isSending ? 'Waiting…' : 'Send';
     if (!isSending){
       hideWaiting();
-      input.focus({ preventScroll: true });
+      if (!interviewOver) input.focus({ preventScroll: true });
     }
   }
 
@@ -3412,84 +3525,159 @@
       addDivider('Turn ' + data.question_count);
     }
 
+    if (data.ended){
+      // No more answers; the verdict waits until the player has read her
+      // last line and asks for it.
+      interviewOver = true;
+      pendingResolution = data.resolution;
+    }
     showChatPanel();
     addTranscriptRow('Investigator', 'investigator', data.next_line, function(){
-      showChatPanel();
       if (data.ended){
-        setTimeout(function(){
-          populateResolution(data.resolution);
-          showScreen('resolution');
-        }, 500);
+        document.querySelector('.t-input-row').hidden = true;
+        document.getElementById('endRow').hidden = false;
+        document.getElementById('verdictBtn').focus({ preventScroll: true });
       }
+      showChatPanel();
     });
   }
 
-  var VERIFY_LABELS = {
-    confirmed:'Confirmed', disproved:'Disproved', inconclusive:'Inconclusive', not_material:'Not material'
+  var interviewOver = false, pendingResolution = null;
+  document.getElementById('verdictBtn').addEventListener('click', function(){
+    if (!pendingResolution) return;
+    ensureAudio();
+    populateResolution(pendingResolution);
+    showScreen('resolution');
+  });
+
+  // What each records check means for the player, in a word or two.
+  var VERIFY_LOOKS = {
+    disproved:    { label:'Didn\u2019t hold up', cls:'bad'  },
+    confirmed:    { label:'Checked out',         cls:'good' },
+    inconclusive: { label:'Couldn\u2019t tell', cls:'flat' },
+    not_material: { label:'Didn\u2019t matter', cls:'flat' }
   };
 
-  function signed(n){ return (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n); }
+  // The headline and one line under it, by outcome. Plain words; the
+  // numbers come from the case.
+  function verdictCopy(res){
+    var line = res.threshold, score = res.final_score;
+    if (res.outcome === 'CAUGHT' && res.decided_in_room){
+      return { head:'You were caught in the room.',
+               sub:'Your answers gave her enough before the questions ran out. It\u2019s a finding of fraud.' };
+    }
+    if (res.outcome === 'CAUGHT'){
+      return { head:'Guilty: a finding of fraud.',
+               sub:'Once your story was checked against the records, the case against you reached ' + score + ', past the line at ' + line + '.' };
+    }
+    if (res.outcome === 'POLICY_VIOLATION_ONLY'){
+      return { head:'A broken rule, not fraud.',
+               sub:'They showed you broke company rules, but not that you meant to steal. The case ended at ' + score + ', under the line at ' + line + '.' };
+    }
+    return { head:'Nothing stuck.',
+             sub:'The case against you ended at ' + score + ', under the line at ' + line + '. You walk out with no finding.' };
+  }
 
-  function reportRow(tag, tagMuted, text, pts, sub){
+  function signed(n){ return (n > 0 ? '+' : n < 0 ? '\u2212' : '\u00b1') + Math.abs(n); }
+
+  // One line of the report: a tag, the text (two lines, tap for the rest),
+  // and a small note on the right.
+  function hitRow(tag, tagCls, text, note, more){
     var li = document.createElement('li');
+    li.className = 'hit';
     var t = document.createElement('span');
-    t.className = 'cr-tag' + (tagMuted ? ' muted' : '');
+    t.className = 'hit-tag ' + tagCls;
     t.textContent = tag;
     var body = document.createElement('span');
+    body.className = 'hit-text';
     body.textContent = text;
-    var p = document.createElement('span');
-    p.className = 'cr-pts';
-    p.textContent = pts ? signed(pts) : '';
-    li.append(t, body, p);
-    if (sub){
-      var s = document.createElement('span');
-      s.className = 'cr-sub';
-      s.textContent = sub;
-      li.appendChild(s);
+    var n = document.createElement('span');
+    n.className = 'hit-note';
+    n.textContent = note || '';
+    li.append(t, body, n);
+    if (more){
+      var m = document.createElement('span');
+      m.className = 'hit-more';
+      m.textContent = more;
+      m.hidden = true;
+      li.appendChild(m);
     }
+    li.tabIndex = 0;
+    li.addEventListener('click', function(){
+      li.classList.toggle('open');
+      if (more) li.querySelector('.hit-more').hidden = !li.classList.contains('open');
+    });
     return li;
   }
 
   function renderCaseReport(res){
-    document.getElementById('crReasoning').textContent = res.reasoning || '';
-    document.getElementById('crConfidence').textContent =
-      res.confidence ? res.confidence + ' confidence' : '';
+    var copy = verdictCopy(res);
+    document.getElementById('verdictHead').textContent = copy.head;
+    document.getElementById('verdictSub').textContent = copy.sub;
 
-    var interview = res.interview_score || 0;
-    var verify = res.verification_score_delta || 0;
-    // Whatever's left is the refund for excuses verification confirmed true
-    // (resolution.py gives back their in-room suspicion points).
-    var refund = res.final_score - interview - verify;
-    document.getElementById('crInterview').textContent = interview;
-    document.getElementById('crVerify').textContent = signed(verify);
-    document.getElementById('crRefundRow').hidden = refund === 0;
-    document.getElementById('crRefund').textContent = signed(refund);
-    document.getElementById('crFinal').textContent = res.final_score;
-    document.getElementById('crThresholdNote').textContent = '(arrest at ' + res.threshold + ')';
+    // The score card only when the case went to the records check: if she
+    // caught you in the room, the score isn't the story.
+    var showScore = !(res.outcome === 'CAUGHT' && res.decided_in_room);
+    document.getElementById('scoreCard').hidden = !showScore;
+    if (showScore){
+      document.getElementById('finalScore').textContent = res.final_score;
+      document.getElementById('finalThreshold').textContent = res.threshold;
+      document.getElementById('scFill').style.width = Math.max(2, Math.min(100, res.final_score)) + '%';
+      document.getElementById('scFill').classList.toggle('over', res.final_score >= res.threshold);
+      document.getElementById('scLine').style.left = Math.min(100, res.threshold) + '%';
+      var interview = res.interview_score || 0;
+      var verify = res.verification_score_delta || 0;
+      // What's left is the refund for excuses the records confirmed
+      // (resolution.py gives their in-room points back).
+      var refund = res.final_score - interview - verify;
+      var parts = document.getElementById('scParts');
+      parts.innerHTML = '';
+      [['In the room', String(interview)],
+       ['Records check', signed(verify)],
+       refund ? ['Excuses that checked out', signed(refund)] : null
+      ].forEach(function(pt){
+        if (!pt) return;
+        var c = document.createElement('span');
+        c.className = 'sc-part';
+        var l = document.createElement('span'); l.textContent = pt[0];
+        var v = document.createElement('b'); v.textContent = pt[1];
+        c.append(l, v);
+        parts.appendChild(c);
+      });
+    }
 
     var findings = res.findings || [];
+    document.getElementById('crFindingsHead').textContent =
+      res.outcome === 'CAUGHT' ? 'What caught you' : 'What counted against you';
     var fList = document.getElementById('crFindings');
     fList.innerHTML = '';
     findings.forEach(function(f){
-      fList.appendChild(reportRow(f.tag, false, f.text, f.points, 'Question ' + f.turn));
+      fList.appendChild(hitRow(f.tag, 'bad', f.text, 'Q' + f.turn + ' \u00b7 +' + f.points));
     });
     document.getElementById('crFindingsBlock').hidden = findings.length === 0;
 
-    var checks = res.verifications || [];
+    // Records checks that mattered first; the shrugs last.
+    var order = { disproved:0, confirmed:1, inconclusive:2, not_material:3 };
+    var checks = (res.verifications || []).slice().sort(function(a, b){
+      return (order[a.status] || 9) - (order[b.status] || 9);
+    });
     var vList = document.getElementById('crVerifications');
     vList.innerHTML = '';
     checks.forEach(function(v){
-      vList.appendChild(reportRow(VERIFY_LABELS[v.status] || v.status, !(v.points > 0), v.claim, v.points, v.basis));
+      var look = VERIFY_LOOKS[v.status] || { label:v.status, cls:'flat' };
+      vList.appendChild(hitRow(look.label, look.cls, v.claim, v.points > 0 ? '+' + v.points : '', v.basis));
     });
     document.getElementById('crVerifyBlock').hidden = checks.length === 0;
+
+    document.getElementById('crReasoning').textContent = res.reasoning || '';
+    document.getElementById('aftermathText').textContent = res.aftermath || '';
+    document.getElementById('fullReport').open = false;
+    document.getElementById('fullReport').hidden = !(res.reasoning || res.aftermath);
   }
 
   function populateResolution(res){
     var v = VERDICT_LOOKS[res.outcome] || VERDICT_LOOKS.NOT_PROVEN;
 
-    document.getElementById('finalScore').textContent = res.final_score;
-    document.getElementById('finalThreshold').textContent = res.threshold;
-    document.getElementById('aftermathText').textContent = res.aftermath;
     renderCaseReport(res);
 
     playFinale(VERDICT_LOOKS[res.outcome] ? res.outcome : 'NOT_PROVEN', v);
@@ -3535,6 +3723,8 @@
   var resolution = document.getElementById('resolutionScreen');
 
   function showScreen(name){
+    document.body.setAttribute('data-screen', name);
+    fitToScreen();
     briefing.hidden = name !== 'briefing';
     interview.hidden = name !== 'interview';
     resolution.hidden = name !== 'resolution';
@@ -3545,6 +3735,39 @@
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }
+
+  // ---------- Phone layout: fit the interview to the visible screen ----------
+  function isPhone(){ return window.matchMedia('(max-width: 700px)').matches; }
+
+  // On a phone the first-time explanation would take the room the keyboard
+  // needs; once the player goes to answer, they've read it.
+  document.getElementById('answerInput').addEventListener('focus', function(){
+    if (isPhone()) document.getElementById('coach').hidden = true;
+  });
+
+  function fitToScreen(){
+    var h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty('--app-h', Math.round(h) + 'px');
+    // the ?demo banner sits above the layout; leave room for it
+    var banner = document.querySelector('.demo-banner');
+    document.documentElement.style.setProperty('--banner-h', (banner ? banner.offsetHeight : 0) + 'px');
+    // A short room (phone, keyboard open) shows the whole scene, smaller,
+    // instead of cropping off the table and whatever is on it.
+    var svg = document.querySelector('#room svg');
+    if (svg) svg.setAttribute('preserveAspectRatio', isPhone() && h < 600 ? 'xMidYMid meet' : 'xMidYMid slice');
+    if (document.body.getAttribute('data-screen') === 'interview' && isPhone()){
+      window.scrollTo(0, 0);
+      // keep the newest line in view as the keyboard opens or closes
+      var chat = document.getElementById('tScroll');
+      chat.scrollTop = chat.scrollHeight;
+    }
+  }
+  if (window.visualViewport){
+    window.visualViewport.addEventListener('resize', fitToScreen);
+    window.visualViewport.addEventListener('scroll', fitToScreen);
+  }
+  window.addEventListener('resize', fitToScreen);
+  fitToScreen();
 
   // ---------- Case-file drawer ----------
   var drawer = document.getElementById('caseDrawer');
@@ -3837,6 +4060,11 @@
   });
 
   function startTranscript(){
+    interviewOver = false;
+    pendingResolution = null;
+    document.querySelector('.t-input-row').hidden = false;
+    document.getElementById('endRow').hidden = true;
+    setSendingUI(false);
     document.getElementById('tScroll').innerHTML = '';
     document.getElementById('board').innerHTML = '<span class="empty-note">— nothing pinned yet —</span>';
     document.getElementById('boardCount').textContent = '0 pinned';
@@ -3904,20 +4132,21 @@
   // be checked without playing a full interview. Use Replay to watch it again
   // with sound (browsers block audio until a user gesture).
   // Placeholder content, clearly marked: only the layout is real here.
-  function previewResolution(outcome){
+  function previewResolution(outcome, decided){
+    var score = { CAUGHT:86, POLICY_VIOLATION_ONLY:62, NOT_PROVEN:38 }[outcome] || 60;
     return {
-      outcome: outcome, final_score: 86, threshold: 80,
-      interview_score: 67, verification_score_delta: 23,
+      outcome: outcome, final_score: score, threshold: 80, decided_in_room: !!decided,
+      interview_score: score - 13, verification_score_delta: 15,
       confidence: 'preview',
       reasoning: 'Preview text. In a real game this is the resolution pass\'s reasoning for the outcome, written from the interview record and the verification results below.',
       aftermath: 'Preview of the ' + outcome + ' ending. In a real game this is the aftermath written by the resolution pass.',
       findings: [
-        { tag:'CONTRADICTION', text:'Preview finding: a statement that conflicted with an earlier answer.', turn:3, points:15 },
-        { tag:'EVASION', text:'Preview finding: a direct question that went unanswered.', turn:5, points:8 }
+        { tag:'CONTRADICTION', text:'(Preview) Said it was a client dinner, then that no one else came.', turn:3, points:15 },
+        { tag:'EVASION', text:'(Preview) Didn\u2019t say who the client was when asked directly.', turn:5, points:8 }
       ],
       verifications: [
-        { claim:'Preview claim checked against the records.', status:'disproved', basis:'Preview basis: what the records showed.', points:15 },
-        { claim:'Preview excuse that turned out to be true.', status:'confirmed', basis:'Preview basis.', points:0 }
+        { claim:'(Preview) The restaurant made a billing error.', status:'disproved', basis:'(Preview) The restaurant\u2019s records show no correction on that bill.', points:15 },
+        { claim:'(Preview) The trip was approved by the company.', status:'confirmed', basis:'(Preview) The approval is on file.', points:0 }
       ]
     };
   }
@@ -3925,7 +4154,7 @@
   var params = new URLSearchParams(location.search);
   var previewEnding = params.get('ending');
   if (previewEnding && VERDICT_LOOKS[previewEnding] && !params.has('demo')){
-    populateResolution(previewResolution(previewEnding));
+    populateResolution(previewResolution(previewEnding, params.has('early')));
     showScreen('resolution');
   }
 
@@ -3964,7 +4193,8 @@
           next_line:t.line,
           findings:[{ tag:t.tag, points:t.pts }],
           ended:!!t.ended,
-          resolution: t.ended ? previewResolution(outcome) : null
+          // CAUGHT ends early here (turn 6 of 8), so it's decided in the room
+          resolution: t.ended ? previewResolution(outcome, outcome === 'CAUGHT') : null
         })));
       }
       return realFetch(url, opts);
