@@ -700,10 +700,32 @@ For every supplied assessment determine:
   DEFENSE, or CONTRADICTION — those are determined automatically from upstream
   fields and any value you set for them will be overwritten.
 - risk_profile
-- strategic_value
+- potential_impact
+- in_game_check
 - future_verification_value
+- closes_gap
 - evidentiary_impact
 - suggested_thread
+
+potential_impact is what the claim would weigh against the suspect if it were
+shown false, judged on the same rubric as evidentiary_impact below. A central
+excuse that would collapse the suspect's defense if false is strong or
+decisive; a side detail that would change nothing is none or weak. It is a
+judgment about the claim, not about how likely it is to be false.
+
+in_game_check is how far the claim can be tested in this room: against the
+known facts, the policy and the suspect's own earlier words.
+future_verification_value is how surely it can be checked after the interview:
+from records, cameras, the merchant, or another person. Both: none, low,
+medium or high.
+
+closes_gap applies to defenses: if the claim were true, would it account for
+any part of the allegation — why it cost what it did, why it went unnoticed or
+unreported, where the receipt went? If it would, it closes a gap, however weak,
+convenient or unbelievable it is: weakness is for the investigator to test. It
+is false only for an answer that would leave every part of the allegation
+exactly as unexplained as before even if true — something absurd or beside the
+point. When unsure, true.
 
 STRICT RULES:
 - Preserve the Evidence Checker's verification_status exactly as given.
@@ -845,8 +867,10 @@ def _merge_checker_results(
             relation=evidence.relation,
             claim_type=claim_type,
             verification_status=evidence.verification_status,
-            strategic_value=significance.strategic_value,
+            potential_impact=significance.potential_impact,
+            in_game_check=significance.in_game_check,
             future_verification_value=significance.future_verification_value,
+            closes_gap=significance.closes_gap,
             evidentiary_impact=impact,
             suggested_thread=significance.suggested_thread,
             ambiguous=ambiguous_map.get(evidence.claim.strip(), False),
@@ -884,14 +908,32 @@ def run_checker(
         evidence_checker_prompt
         | get_llm(0).with_structured_output(EvidenceAssessmentList)
     )
-    evidence_output = invoke_with_retry(evidence_chain, label="checker: evidence", payload={
+    payload = {
         "known_facts": known_facts,
         "policy": policy,
         "case_log": visible_case_log,
         "suspect_words": suspect_words,
         "transcript": recent_transcript,
         "claims": claims,
-    })
+    }
+    evidence_output = invoke_with_retry(evidence_chain, label="checker: evidence", payload=payload)
+    # The model sometimes returns fewer assessments than claims and the dropped
+    # one is silently never scored — observed on the suspect's central defense
+    # ("the waitress added an extra zero"), 3 claims in, 2 assessments out. Ask
+    # once more for exactly the ones that came back missing.
+    def _norm(text: str) -> str:
+        return " ".join(re.sub(r"[^a-z0-9 ]", " ", text.lower()).split())
+    answered = [_norm(r.claim) for r in evidence_output.results]
+    missing = [
+        c for c in claims
+        if not any(_norm(c) == a or _norm(c) in a or a in _norm(c) for a in answered)
+    ]
+    if missing:
+        print(f"  [checker] {len(missing)} claim(s) came back unassessed, checking again")
+        retry = invoke_with_retry(
+            evidence_chain, label="checker: evidence (missed)", payload={**payload, "claims": missing},
+        )
+        evidence_output.results.extend(retry.results)
     # Stage 1 is only ever shown investigator-visible facts now (hidden authored
     # truth is no longer passed in at all), so a valid fact_id can only be one
     # of these — anything else is a hallucination.
@@ -943,47 +985,53 @@ def run_checker(
     )
 
 
-class SkepticView(BaseModel):
-    strongest_pressure_point: str = Field(
-        description="The single hardest place to press right now: an "
-        "established contradiction, a policy admission, an unsupported "
-        "explanation, or a conclusion that follows from the facts and the "
-        "policy which the suspect has to answer for."
+class DepthView(BaseModel):
+    """The voice that stays on the story the suspect is telling now."""
+    their_story: str = Field(
+        description="What the suspect is claiming right now, taken at face "
+        "value and in their own logic, in two or three sentences."
     )
-    behavioral_read: str = Field(
-        description="What the suspect's own words this turn suggest about how "
-        "they are holding up — calculated evasion, rehearsed composure, "
-        "genuine panic, someone starting to crack. Read it from how they "
-        "actually phrased the answer."
+    what_must_be_true: str = Field(
+        description="If that story were true, what else would have to be "
+        "true, and what would someone who actually lived it be able to tell "
+        "you without effort? Name the one or two that the story so far has "
+        "not supplied."
     )
-    push_now: str = Field(
-        description="The single most aggressive in-room move next turn — a "
-        "question or confrontation, never an outside check. Never target a "
-        "topic in exhausted_targets, even reworded."
+    next_crack: str = Field(
+        description="The single in-room question that tests the weakest of "
+        "those right now, and why it is the weakest. Never a topic in "
+        "exhausted_targets."
+    )
+    evidence_timing: str = Field(
+        description="With this question, which evidence you hold should be "
+        "put to them now, and which kept back until they have committed to a "
+        "version, and why. 'None yet' is a fine answer."
     )
 
 
-class AlternativeView(BaseModel):
-    strongest_innocent_reading: str = Field(
-        description="The strongest plausible non-fraud explanation that still "
-        "fits everything actually known. Argue it properly — this is what "
-        "stops the room steamrolling someone who may be telling the truth."
+class BreadthView(BaseModel):
+    """The voice that looks at the rest of the file."""
+    strongest_other_ground: str = Field(
+        description="Which fact or policy rule in the file, not yet put to "
+        "them in this conversation, used against the story the suspect is "
+        "telling or opening ground the story has not touched, would move this "
+        "interview most right now, and why. Say "
+        "plainly if nothing outside the current story beats staying on it."
     )
-    fairness_risk: str = Field(
-        description="What would be unfair or overreaching about pressing "
-        "hardest right now, and what an innocent person in this exact spot "
-        "would not yet have been able to show."
+    move: str = Field(
+        description="The single in-room question that uses it. Never a topic "
+        "in exhausted_targets."
     )
-    caution_move: str = Field(
-        description="The single in-room move that fairly tests the innocent "
-        "reading without assuming guilt — a question, not an outside check. "
-        "Never target a topic in exhausted_targets."
+    evidence_timing: str = Field(
+        description="With this question, which evidence you hold should be "
+        "put to them now, and which kept back until they have committed to a "
+        "version, and why. 'None yet' is a fine answer."
     )
 
 
 class WarRoomBundle(BaseModel):
-    skeptic: SkepticView
-    alternative: AlternativeView
+    depth: DepthView
+    breadth: BreadthView
 
 
 def _known_facts(state: GameState) -> str:
@@ -1000,7 +1048,7 @@ def _full_context(state: GameState, findings_this_turn=None) -> dict:
         "known_facts": _known_facts(state),
         "policy": "\n".join(f"- {p}" for p in state.case.policy_rules) or "- None",
         "room_objects": state.case.room_objects or ["- Nothing but the case file"],
-        "case_log": state.case_log.investigator_view(),
+        "case_log": state.case_log.room_view(),
         "findings_this_turn": [
             {
                 "claim": r.quoted_evidence,
@@ -1015,10 +1063,14 @@ def _full_context(state: GameState, findings_this_turn=None) -> dict:
             for i, t in enumerate(t for t in state.transcript if t["role"] == "suspect")
         ) or "- Nothing said yet",
         "transcript": state.transcript,
+        "last_question": next(
+            (t["text"] for t in reversed(state.transcript) if t["role"] == "investigator"),
+            "",
+        ),
         "prior_summary": state.narrative.summary if state.narrative else "",
+        "prior_board": state.lead_board or "- Empty: this is the first answer.",
         "exhausted_targets": state.case_log.exhausted_targets or ["- None"],
         "banked_subjects": state.banked_subjects or ["- None yet"],
-        "move_history": state.move_history[-6:],
         "remaining": max(state.max_questions - state.question_count, 0),
         "score": state.score,
         "threshold": state.case.arrest_threshold,
@@ -1064,13 +1116,9 @@ Running summary of the account so far (empty on turn 1):
 Topics already exhausted — closed, not to be reworded:
 {exhausted_targets}
 
-ALREADY BANKED — these subjects have been established and scored. Pressing them
-again establishes nothing new, however the question is worded. Use them as
-leverage if it helps, but do not spend a turn trying to win them twice:
+Already established on the record (use them as leverage; they need no
+re-establishing):
 {banked_subjects}
-
-Recent moves already made:
-{move_history}
 
 Questions remaining: {remaining}
 Case strength: {score}/{threshold}
@@ -1083,72 +1131,86 @@ HAS THE UNFALSIFIABLE-ACCOUNT PATTERN ALREADY BEEN FLAGGED?
 {already_flagged_unfalsifiable}"""
 
 
-skeptic_prompt = ChatPromptTemplate.from_messages([
+depth_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
-        """You are the Skeptical Investigator in an internal war room — the
-voice arguing to press harder, right now.
+        """You are one of two colleagues advising the Lead Investigator between
+questions. Your job is the story the suspect is telling right now.
 
-You have the whole case in front of you: every fact, every policy rule, the
-whole transcript. Use them together, not one at a time — the strongest pressure
-point is usually a conclusion that follows from two things nobody has yet put
-side by side, and it will not be labelled as such in the record.
+First answers are easy to give and easy to dodge with; a story comes apart
+when someone stays on it and asks for what only a person who lived it would
+know. Take their latest account at face value, as they mean it, and work out
+what would have to be true if it were: what they would have seen, done,
+noticed or kept, and what other people or systems would have done. Then find
+the weakest of those that the story has not yet supplied, and the question
+that tests it now.
 
-Say what else you considered and why the point you chose beats it. If the only
-thing you can think to press is something the record already establishes, you
-have not looked far enough.
+Reading their story fairly is part of the job, not a courtesy: an account you
+have not understood is one you cannot test, and if it holds up when tested,
+that is worth knowing too. A detail is worth asking for when the answer can be
+held against something — a fact, a record that could be checked later, their
+own earlier words, a rule — not merely because they should be able to give it. Start from what they said in their last answer:
+if it gave you something new, that is usually where the next crack is. A crack
+the conversation has already put to them has been tried; what matters now is
+what their answer to it opened up.
 
-Read HOW the suspect is answering, not just what they say — someone perfectly
-calm while sitting on a strong contradiction is stalling; someone who suddenly
-gets rattled or over-explains just got close to something.
+What would have to be true is something to put to them, never something you
+know happened. The test is grammatical: "something of that kind normally does
+X" is a question you are putting to them; "it did X here" is a claim nobody has
+checked, and it may not be made however obvious it sounds.
 
-Do not assume an unresolved claim is false.
-Never state a document, record or check as existing unless it is literally in
-the known facts or the case log.
-Do not chase a side story just because it is new.
-Do not propose fetching a document, calling a witness or checking a record —
-propose what to ASK or how to CONFRONT, right now, in this room.
-You are arguing a position, not filing a status report: be willing to disagree
-with a more cautious read of the same facts."""
+Ground everything in what is in front of you: their own words, the known
+facts, the policy. Never state a document, record or check as existing unless
+it is in the known facts or the case log.
+
+The room is conversation only: neither side can show, open, fetch or look
+anything up. Propose what to ASK, never something to produce or check."""
     ),
     ("human", _CASE_BLOCK),
 ])
 
 
-alternative_prompt = ChatPromptTemplate.from_messages([
+breadth_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
-        """You are the Alternative-Hypothesis Investigator — the voice arguing
-for caution, right now.
+        """You are one of two colleagues advising the Lead Investigator between
+questions. The other one is staying on the story the suspect is telling right
+now; your job is the rest of the file.
 
-You have the whole case in front of you: every fact, every policy rule, the
-whole transcript. Identify the strongest plausible non-fraud explanation that
-still fits ALL of it, and name what would have to be true of an innocent person
-in this exact spot that this suspect has not yet been given the chance to show.
+Look at the known facts and the policy rules against what the suspect has
+said, and at what the conversation has already put to them. Of what has NOT
+been put to them yet, which one, put to them now, would do the most: break the story they are
+telling from the outside, or open ground their story has not touched? A fact
+is worth a question when it bears on what they are claiming, not because it
+has not been used yet, and a fact that agrees with what they have already told
+you does not test anything. Ground the conversation has already covered is not
+the rest of the file. Remember that their own version of events can break a
+rule by itself, before anyone proves it false. If nothing in the file beats staying on the
+current story, say so plainly.
 
-Use the facts against each other the same way the Skeptic does, but in the
-other direction: a fact that looks damning alone may be ordinary once another
-fact is placed beside it. Say so when that is the case.
+What would have to be true is something to put to them, never something you
+know happened. The test is grammatical: "something of that kind normally does
+X" is a question you are putting to them; "it did X here" is a claim nobody has
+checked, and it may not be made however obvious it sounds.
 
-Your job is to stop the room steamrolling someone who may be telling the truth.
-Do not invent evidence and do not treat unsupported claims as established.
-Do not propose fetching a document, calling a witness or checking a record —
-propose what to ASK, right now, that would fairly test the innocent reading.
-You are arguing against the Skeptic, not hedging: if their read overreaches,
-say so plainly."""
+Ground everything in what is in front of you. Never state a document, record
+or check as existing unless it is in the known facts or the case log.
+
+The room is conversation only: neither side can show, open, fetch or look
+anything up. Propose what to ASK, never something to produce or check."""
     ),
     ("human", _CASE_BLOCK),
 ])
 
 
-def run_skeptic(state: GameState, findings_this_turn=None) -> SkepticView:
-    chain = skeptic_prompt | get_llm(0.2).with_structured_output(SkepticView)
-    return invoke_with_retry(chain, _full_context(state, findings_this_turn), label="skeptic")
+def run_depth(state: GameState, findings_this_turn=None) -> DepthView:
+    chain = depth_prompt | get_llm(0.2).with_structured_output(DepthView)
+    return invoke_with_retry(chain, _full_context(state, findings_this_turn), label="depth")
 
 
-def run_alternative_hypothesis(state: GameState, findings_this_turn=None) -> AlternativeView:
-    chain = alternative_prompt | get_llm(0.2).with_structured_output(AlternativeView)
-    return invoke_with_retry(chain, _full_context(state, findings_this_turn), label="alternative")
+def run_breadth(state: GameState, findings_this_turn=None) -> BreadthView:
+    chain = breadth_prompt | get_llm(0.2).with_structured_output(BreadthView)
+    return invoke_with_retry(chain, _full_context(state, findings_this_turn), label="breadth")
 
 
 mind_prompt = ChatPromptTemplate.from_messages([
@@ -1162,59 +1224,31 @@ Work in the order the fields are listed. Each one is meant to change what you
 write in the ones after it.
 
 1 — DID THEY ANSWER YOU?
-Write what your last question demanded, then what they actually offered, in
-their terms, and only then whether the second addresses the first.
+Judge their answer against YOUR LAST QUESTION exactly as it was spoken, given
+below — not against what you had planned to ask, and not against what your
+colleagues suggest asking next. Write what that question demanded, then what
+they actually offered, in their terms, and only then whether the second
+addresses the first.
 
 Responsiveness is the whole test, and it is not the same as belief. A lie that
 engages with the question is an answer. So is a hostile one, a vague one, a
 partial one, and one you are about to disprove in the next breath. You are not
 asking whether they are telling the truth — you are asking whether they
-engaged. Only a reply that changes the subject, complains about the question,
-or tells you to go and look it up yourself is a non-answer, however many
-on-topic words it contains.
+engaged. An answer that explains too little, that you find thin, convenient or
+unbelievable, is still an answer: its weakness is what your next question is
+for, not a refusal to record. "I don't know" and "I don't remember" are claims
+too. Only a reply that changes the subject, complains about the question, or
+tells you to go and look it up yourself is a non-answer, however many on-topic
+words it contains.
 
-When it is not an answer, name the subject you asked about, at the granularity
-you asked it.
+If they answered part of what you asked, it was answered: the part they left
+out is still open, not refused. When it is not an answer, name the subject you
+asked about, at the granularity you asked it.
 
 2 — THE ACCOUNT
 Update your running picture of what the suspect says happened, in their logic.
 
-3 — WHAT YOU HAVEN'T USED
-Walk the known facts one at a time and list the ones never yet put to the
-suspect. This is a checklist, not a judgment. An interview that ends with half
-the file unused was not an interview.
-
-4 — WHAT FOLLOWS
-Draw the conclusions nobody has stated yet, from the facts, the policy rules
-and the suspect's own words together. Do the arithmetic where it bites — an
-amount against a spending cap, a date against an approved itinerary, a delay
-against a reporting deadline, a price against what one person plausibly
-consumes. Ask what would HAVE to be true if their account were true, and
-whether the record shows it. This is where an investigator earns their keep:
-the facts are just paper until someone puts two of them together.
-Every inference must be derivable from what is actually in front of you. Never
-state a document, record or check as existing unless it is literally in
-known_facts or the case log. If you are reasoning about what a future check
-might show, say "if verified, this would" — never state it as already true.
-
-You may argue from how the world generally works — how the systems, businesses
-and processes in this case normally operate — and that is legitimate pressure
-rather than speculation, because it puts the burden back on the suspect instead
-of handing them a false statement to correct. The test is grammatical and it is
-absolute: "something of that kind normally does X" is a question you are putting
-to them; "it did X here" is a claim you have not checked, and you may not make it
-however obvious it sounds.
-
-You may also take the suspect's account at face value and work out what ELSE
-would have to be true if it were — what another person, business or system
-would have done or noticed, and whether the suspect behaved like someone for
-whom it was true. You have checked none of it, so none of it is ever a finding
-or an assertion about this case: it is something to put to them. Reasoning
-about how such things normally work is legitimate and belongs here. Stating
-that a particular record exists or says something is not, unless it is in the
-facts.
-
-5 — THE SHAPE OF THE ACCOUNT
+3 — THE SHAPE OF THE ACCOUNT
 Whether a claim contradicts the records or the suspect's own earlier answers is
 the Checker's judgment, already made this turn — its findings are above. Use
 them; do not re-judge them.
@@ -1222,16 +1256,47 @@ Set unfalsifiable_account once and only once, when nothing in the account can be
 checked by anyone. Someone who simply refuses to answer is stonewalling and is
 handled elsewhere; this is for one who answers freely and says nothing checkable.
 
-6 — THE MOVE
-Two colleagues have already argued this turn, independently, neither having
-seen the other's answer. Their reads are below. Adjudicate between them and
-commit — and say honestly which one actually moved you, in
-innocent_reading_won. A room that records the cautious voice and then always
-does what the Skeptic wanted is not a war room, it is theatre. A clean question that gets you nothing is a
-failure; an ugly exchange that gets you one real thing is a win. Silence and
-nonsense are problems to work, not outcomes to accept — if what you are doing
-is not moving them, the answer is a different angle on the same person, not
-more of the same.
+4 — THE BOARD AND THE MOVE
+You have a handful of questions, not a hundred. Keep a board of the suspect's
+claims that matter: for each, how it could be false — what else would explain
+the same facts, and what would tell their version and that one apart — what
+you have found on it so far, and what it could still yield. Your previous board is
+below; update it with what this answer changed. Leaving a claim does not erase
+what you found on it: it stays on the board for later.
+
+Then choose the one question that does the most now: what the best answer
+could establish, and how likely that is, against the best question elsewhere on
+the board and the questions you have left. The Checker's potential_impact on a
+claim (in the case log) is what it would weigh if shown false. A detail is
+worth a question when its answer can be held against something — a fact, a
+record that could be checked later, their own words, a rule. A detail nothing
+can be held against is not, however easily they could supply it.
+
+Two colleagues have advised you, independently: one on the story the suspect is
+telling now, one on the rest of the file. They advise; you decide. Take one of
+their questions, or your own if neither is the right one.
+
+Timing matters as much as the question. Evidence put to them before they have
+committed to a version lets them fit the story around it; get their version
+first, then put what you hold against it. Your colleagues say which evidence to
+show now and which to keep back; weigh that too.
+
+Read HOW they are answering, not just what. Someone polished for three answers
+who suddenly hedges should be pressed on that exact point; someone opening up
+may give more with a lighter touch. And keep track of what they have already
+told you: never ask for something they have just given you, and never put to
+them as news something they told you themselves.
+
+What would have to be true is something to put to them, never something you
+know happened. The test is grammatical: "something of that kind normally does
+X" is a question you are putting to them; "it did X here" is a claim nobody has
+checked, and it may not be made however obvious it sounds.
+
+The room is conversation only. Neither of you can show, open, fetch or look
+anything up here; ask what they know, remember and did.
+
+Your aim is one question, one thing to get from them this turn. The person who
+speaks to the suspect does not choose between questions; they only say yours.
 
 You cannot end this interview, and you cannot act outside this room: you do
 not close the case, file a report, refer anyone to HR or record a finding.
@@ -1240,39 +1305,19 @@ is settled, never because you chose to stop. Every turn you still have is a
 turn to get something from them, so your aim is always something they could
 still give you.
 
-- A concrete, checkable commitment is banked for later: park it and open a
-  different line rather than re-asking it.
-- Pure evasion with nothing pinned down is the real failure. Change the angle,
-  narrow the question, or confront the refusal itself.
-- Do not skip the central claim because outside records will settle it later.
-  You can still press it now for specific concrete detail, and inconsistency in
-  the detail of a fabricated story is itself damning.
-- Read HOW they are answering. Someone polished for three answers who suddenly
-  hedges should be pressed on that exact point. Someone flatly calm while
-  sitting on a contradiction may call for direct confrontation. Someone
-  starting to open up may give more with a lighter touch.
-- If the case log's credibility_flags show a Duty to Cooperate note, stop
-  re-asking that question and confront the pattern of refusal itself.
-- exhausted_targets are CLOSED — not to be reworded, narrowed, or approached
-  from a slightly different technical angle. Pick a different open thread, or
-  challenge the account as a whole.
-- WHEN THEY WILL NOT ANSWER, YOU GET TWO ASKS, NOT FIVE. If they have already
-  refused a subject once, your second attempt is not the same question again:
-  it is telling them plainly what their silence will be recorded as, and then
-  moving on. "If you won't account for the receipt, the record shows there was
-  none, and that is a breach on its own." After that the subject is closed to
-  you — it will appear in exhausted_targets — and re-asking it is wasted.
-  Only state a consequence that actually follows: a fact going on the record
-  against them, a policy breach being recorded. Never threaten an arrest, a
-  dismissal, or an end to the interview that you cannot deliver.
-- Watch your register, not just your topic: three turns of the same kind of
-  pressure reads as a script even when the target changes.
-- When the case is weak and few questions remain, be selective and forceful.
-  When there is runway, build independent lines so the case does not rest on
-  one point of failure.
-- Never propose fetching a document, calling a witness or checking a record.
-  Everything you decide is something to ASK or CONFRONT, in this room, now.
+When they will not answer at all:
+- Silence and nonsense are problems to work, not outcomes to accept. If what
+  you are doing is not moving them, try a different angle on the same person.
+- You get two asks on a subject they refuse, not five. The second is telling
+  them plainly what their silence will be recorded as, then moving on. Only
+  state a consequence that actually follows: a fact going on the record against
+  them, a policy breach being recorded. Never threaten an arrest, a dismissal,
+  or an end to the interview that you cannot deliver.
+- exhausted_targets are closed: subjects they refused twice or that circled
+  without producing anything. Do not reword them.
 
+Never propose fetching a document, calling a witness or checking a record.
+Everything you decide is something to ASK or CONFRONT, in this room, now.
 """
     ),
     (
@@ -1294,11 +1339,17 @@ WHAT THIS TURN'S ANSWER ALREADY PRODUCED (checked against the evidence, not yet
 in the case log above):
 {findings_this_turn}
 
-THE SKEPTIC (argued to press harder, blind to the Alternative):
-{skeptic}
+YOUR BOARD FROM LAST TURN (empty on turn 1):
+{prior_board}
 
-THE ALTERNATIVE HYPOTHESIS (argued for caution, blind to the Skeptic):
-{alternative}
+YOUR LAST QUESTION, exactly as spoken (judge their answer against this):
+"{last_question}"
+
+STAYING ON THE STORY (your colleague's read of the current account):
+{depth}
+
+THE REST OF THE FILE (your other colleague's read, made without seeing the first):
+{breadth}
 
 THE SUSPECT'S OWN WORDS — the only statements that can contradict each other:
 {suspect_words}
@@ -1313,13 +1364,9 @@ Previous running summary (empty on turn 1):
 Topics already exhausted — closed, not to be reworded:
 {exhausted_targets}
 
-ALREADY BANKED — these subjects have been established and scored. Pressing them
-again establishes nothing new, however the question is worded. Use them as
-leverage if it helps, but do not spend a turn trying to win them twice:
+Already established on the record (use them as leverage; they need no
+re-establishing):
 {banked_subjects}
-
-Recent moves you have already made:
-{move_history}
 
 Questions remaining: {remaining}
 Case strength: {score}/{threshold}
@@ -1345,19 +1392,19 @@ def run_investigator_mind(
     # is the point of the war room — so waiting for one before starting the
     # other only added its whole latency to every turn.
     with ThreadPoolExecutor(max_workers=2) as pool:
-        skeptic_job = pool.submit(run_skeptic, state, findings_this_turn)
-        alternative_job = pool.submit(run_alternative_hypothesis, state, findings_this_turn)
-        skeptic = skeptic_job.result()
-        alternative = alternative_job.result()
+        depth_job = pool.submit(run_depth, state, findings_this_turn)
+        breadth_job = pool.submit(run_breadth, state, findings_this_turn)
+        depth = depth_job.result()
+        breadth = breadth_job.result()
 
     context = _full_context(state, findings_this_turn)
-    context["skeptic"] = skeptic.model_dump()
-    context["alternative"] = alternative.model_dump()
+    context["depth"] = depth.model_dump()
+    context["breadth"] = breadth.model_dump()
     chain = mind_prompt | get_llm(0.3).with_structured_output(InvestigatorMind)
     mind = invoke_with_retry(chain, context, label="lead")
 
     if return_debug:
-        return mind, WarRoomBundle(skeptic=skeptic, alternative=alternative)
+        return mind, WarRoomBundle(depth=depth, breadth=breadth)
     return mind
 
 
@@ -1446,7 +1493,7 @@ general statement, then write the line. Do not write the line first and
 back-fill sources for it.
 
 OTHER HARD RULES:
-- pursue the target you were given,
+- say the question you were given; choosing what to ask is not your job,
 - never expose hidden case truth,
 - pressure may refer truthfully to future checking (e.g. records can be checked),
   but never claim the check already proved something,
@@ -1502,9 +1549,9 @@ Next line:"""
 _DEEPSEEK_ADDON = {
     "evidence_checker_prompt": """Keep each reasoning step to one or two
 sentences. The status is what gets used; the working only has to justify it.""",
-    "skeptic_prompt": """Each field is two or three sentences: the point and
+    "depth_prompt": """Each field is two or three sentences: the point and
 what carries it. The Lead needs your argument, not every angle you weighed.""",
-    "alternative_prompt": """Each field is two or three sentences: the point and
+    "breadth_prompt": """Each field is two or three sentences: the point and
 what carries it. The Lead needs your argument, not every angle you weighed.""",
     "mind_prompt": """Each field is a few sentences at most, or a short list of
 short items. These are working notes, not a report; anything the next field
@@ -1553,7 +1600,7 @@ def run_speaker(
         # the Speaker nearly word for word, announcements included. The
         # Speaker gets what the Lead is after and the facts it checked, and
         # has to find the words itself.
-        "aim": getattr(move, "aim", "") or move.target,
+        "aim": move.aim,
         "specifics": "\n".join(f"- {g}" for g in getattr(move, "target_grounding", []) or [])
         or "- none",
         "remaining": remaining,

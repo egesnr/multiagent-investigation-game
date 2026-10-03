@@ -56,10 +56,14 @@ STALL_CHARGE_MAX = 30
 DODGE_FACT_POINTS = 8
 
 # An unverified defense the suspect cannot substantiate raises suspicion even
-# though nothing is proven yet. Scaled by how central the Checker judged the
-# claim: an unsupported excuse about the core allegation counts, idle detail
-# does not. Refunded by resolution if the claim is later confirmed true.
-PROVISIONAL_POINTS = {"high": 8, "medium": 5, "low": 0}
+# though nothing is proven yet: this share of what the claim would cost them
+# if it were shown false (its potential_impact, on the same IMPACT_POINTS
+# scale) goes on the board now. Resolution settles the rest: the remainder if
+# the claim is disproved, a refund if it is confirmed or if a check that was
+# expected to settle it turns up nothing. The old table (8/5/0 by an
+# undefined "strategic value") was not tied to what the claim was worth, and
+# a disproof then added the full impact on top of it, counting the claim twice.
+PROVISIONAL_SHARE = 0.4
 
 
 def apply_tier(score: int) -> int:
@@ -242,7 +246,8 @@ def update_case_log(results: list[CheckResult], state: GameState) -> GameState:
                     investigator_visible=result.investigator_visible,
                     relation=result.relation,
                     claim_type=result.claim_type,
-                    strategic_value=result.strategic_value,
+                    potential_impact=result.potential_impact,
+                    in_game_check=result.in_game_check,
                     future_verification_value=result.future_verification_value,
                     evidentiary_impact=result.evidentiary_impact,
                     suggested_thread=result.suggested_thread,
@@ -284,7 +289,7 @@ def update_case_log(results: list[CheckResult], state: GameState) -> GameState:
                     topic=result.suggested_thread,
                     source_claim=text,
                     status=LeadStatus.OPEN,
-                    importance=result.strategic_value,
+                    importance=result.potential_impact.value,
                     future_verification_value=result.future_verification_value,
                 )
                 state.case_log.leads.append(lead)
@@ -307,7 +312,7 @@ def calculate_claim_score(result: CheckResult, state: GameState) -> tuple[int, s
     Convert the Checker's semantic evidentiary impact into deterministic points.
 
     An unverified claim scores no established points, but an unverified
-    *defense* scores provisional suspicion — see PROVISIONAL_POINTS. Testing
+    *defense* scores provisional suspicion — see PROVISIONAL_SHARE. Testing
     showed a careful liar was strictly better off than an honest suspect:
     every excuse he could not be caught on scored exactly zero, so six
     fabrications left him on 16 points while a man who admitted everything
@@ -322,7 +327,11 @@ def calculate_claim_score(result: CheckResult, state: GameState) -> tuple[int, s
     if status == ClaimStatus.UNVERIFIED:
         if result.claim_type != ClaimType.DEFENSE:
             return 0, None
-        points = PROVISIONAL_POINTS.get(result.strategic_value, 0)
+        if not result.closes_gap:
+            # Explains nothing even if believed: handled as not answering
+            # (see process_turn_scoring), not as a defense to settle later.
+            return 0, None
+        points = round(IMPACT_POINTS[result.potential_impact] * PROVISIONAL_SHARE)
         if points <= 0:
             return 0, None
         key = _claim_key(result)
@@ -332,8 +341,13 @@ def calculate_claim_score(result: CheckResult, state: GameState) -> tuple[int, s
         _bank_subject(state, result)
         # Recorded per-claim so resolution can take it back off the board if
         # the claim turns out to be true.
-        state.provisional_findings[result.quoted_evidence.strip()] = points
-        return points, f"unverified defense, provisional suspicion (+{points})"
+        claim = result.quoted_evidence.strip()
+        state.provisional_findings[claim] = points
+        state.provisional_post_check[claim] = result.future_verification_value.value
+        return points, (
+            f"unverified defense, provisional suspicion (+{points} of "
+            f"{IMPACT_POINTS[result.potential_impact]} if shown false)"
+        )
 
     points = IMPACT_POINTS[result.evidentiary_impact]
     if points <= 0:
@@ -365,7 +379,10 @@ def _turn_usefulness(results: list[CheckResult], delta: int) -> str:
         return "high_future_value"
     if any(r.risk_profile.evasion for r in results):
         return "evasion_no_gain"
-    if any(r.strategic_value in {"high", "medium"} for r in results):
+    if any(
+        r.potential_impact in {EvidentiaryImpact.MODERATE, EvidentiaryImpact.STRONG, EvidentiaryImpact.DECISIVE}
+        for r in results
+    ):
         return "material_but_unresolved"
     if results:
         return "low_value"
@@ -390,6 +407,29 @@ def process_turn_scoring(
             breakdown.append(f"'{result.quoted_evidence}' -> {reason}")
 
     state = update_case_log(results, state)
+
+    # The suspect carries the burden. A defense that would explain nothing even
+    # if believed has not answered the allegation, so it is charged the way a
+    # refusal is — once per subject, through the same escalating stall charge.
+    # Skipped when the Lead already recorded a dodge this turn, so one answer
+    # is not charged twice.
+    if not dodged_subject:
+        for result in results:
+            if (
+                result.investigator_visible
+                and result.claim_type == ClaimType.DEFENSE
+                and _effective_status(result) == ClaimStatus.UNVERIFIED
+                and not result.closes_gap
+            ):
+                subject = (result.subject or result.quoted_evidence).strip()
+                gap_points, gap_lines = charge_for_dodge(state, subject, False)
+                raw_delta += gap_points
+                breakdown.extend(
+                    f"{line} — a defense that explains nothing" for line in gap_lines
+                )
+                # One answer is one failure to answer, however many sentences
+                # it was split into.
+                break
 
     # No per-turn cap: a cap discarded legitimately earned points purely based
     # on which turn they happened to land in, so the same suspect making the

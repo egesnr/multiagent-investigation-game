@@ -70,18 +70,19 @@ future = CheckResult(
     investigator_visible=True,
     verification_status=ClaimStatus.UNVERIFIED,
     claim_type=ClaimType.DEFENSE,
-    strategic_value="high",
+    potential_impact=EvidentiaryImpact.DECISIVE,
     future_verification_value=FutureVerificationValue.HIGH,
     evidentiary_impact=EvidentiaryImpact.NONE,
     suggested_thread="restaurant amount-entry error",
 )
 before = state.score
 delta, state = process_turn_scoring([future], state)
-assert delta == 8, f"high-value unsupported defense should raise suspicion, got {delta}"
-assert state.score == before + 8
-assert state.provisional_findings["The restaurant added an extra zero."] == 8, (
+assert delta == 10, f"40% of a decisive (25) excuse should go on the board, got {delta}"
+assert state.score == before + 10
+assert state.provisional_findings["The restaurant added an extra zero."] == 10, (
     "provisional points must be recorded per claim so resolution can refund them"
 )
+assert state.provisional_post_check["The restaurant added an extra zero."] == "high"
 assert state.last_turn_usefulness == "high_future_value"
 assert "restaurant amount-entry error" in state.case_log.parked_threads
 
@@ -94,7 +95,7 @@ chatter = CheckResult(
     investigator_visible=True,
     verification_status=ClaimStatus.UNVERIFIED,
     claim_type=ClaimType.BACKGROUND,
-    strategic_value="high",
+    potential_impact=EvidentiaryImpact.STRONG,
 )
 before = state.score
 delta, state = process_turn_scoring([chatter], state)
@@ -124,7 +125,6 @@ for wording in abuse_wordings:
         investigator_visible=True,
         verification_status=ClaimStatus.SUPPORTED,
         claim_type=ClaimType.OTHER,
-        strategic_value="high",
         evidentiary_impact=EvidentiaryImpact.STRONG,
     )
     delta, abuse_state = process_turn_scoring([finding], abuse_state)
@@ -145,7 +145,6 @@ rebadged = CheckResult(
     investigator_visible=True,
     verification_status=ClaimStatus.ADMITTED,
     claim_type=ClaimType.ADMISSION,
-    strategic_value="high",
     evidentiary_impact=EvidentiaryImpact.STRONG,
 )
 delta, abuse_state = process_turn_scoring([rebadged], abuse_state)
@@ -162,10 +161,10 @@ unchecked = CheckResult(
     investigator_visible=True,
     verification_status=ClaimStatus.UNVERIFIED,
     claim_type=ClaimType.DEFENSE,
-    strategic_value="high",
+    potential_impact=EvidentiaryImpact.STRONG,
 )
 delta, band_state = process_turn_scoring([unchecked], band_state)
-assert delta == 8, f"unverified defense should score provisionally, got {delta}"
+assert delta == 6, f"40% of a strong (15) excuse should score provisionally, got {delta}"
 disproved = CheckResult(
     quoted_evidence="The suspect dined alone.",
     subject="who the suspect dined with",
@@ -174,7 +173,6 @@ disproved = CheckResult(
     investigator_visible=True,
     verification_status=ClaimStatus.CONTRADICTED,
     claim_type=ClaimType.CONTRADICTION,
-    strategic_value="high",
     evidentiary_impact=EvidentiaryImpact.STRONG,
 )
 delta, band_state = process_turn_scoring([disproved], band_state)
@@ -191,7 +189,6 @@ same_turn = [
         investigator_visible=True,
         verification_status=ClaimStatus.SUPPORTED,
         claim_type=ClaimType.OTHER,
-        strategic_value="high",
         evidentiary_impact=EvidentiaryImpact.MODERATE,
     )
     for w in ("I did nothing wrong.", "I dispute the premise entirely.")
@@ -220,7 +217,6 @@ for wording in rewordings:
         investigator_visible=True,
         verification_status=ClaimStatus.CONTRADICTED,
         claim_type=ClaimType.CONTRADICTION,
-        strategic_value="high",
         evidentiary_impact=EvidentiaryImpact.STRONG,
     )
     delta, story_state = process_turn_scoring([finding], story_state)
@@ -345,5 +341,56 @@ assert merged[0].risk_profile.fact_contradiction is True
 assert merged[1].risk_profile.policy_breach is False, (
     "policy_breach must be forced False for an UNVERIFIED claim"
 )
+
+# A defense that would explain nothing even if believed has not answered the
+# allegation: it is charged like a refusal (first stall charge, 6), not given a
+# provisional score to settle later.
+gap_state = GameState(case=case)
+dream = CheckResult(
+    quoted_evidence="Elon Musk told me in a dream to order it.",
+    subject="why the dinner cost $3,200",
+    rationale="Nothing can bear on it.",
+    basis=FindingBasis.UNRESOLVED,
+    investigator_visible=True,
+    verification_status=ClaimStatus.UNVERIFIED,
+    claim_type=ClaimType.DEFENSE,
+    potential_impact=EvidentiaryImpact.STRONG,
+    closes_gap=False,
+)
+delta, gap_state = process_turn_scoring([dream], gap_state)
+assert delta == 6, f"a defense that closes nothing should cost the first stall charge, got {delta}"
+assert not gap_state.provisional_findings, "it must not be held as a provisional excuse"
+# ...and not charged a second time when the Lead already recorded a dodge.
+gap_state2 = GameState(case=case)
+delta, gap_state2 = process_turn_scoring(
+    [dream], gap_state2, dodged_subject="why the dinner cost $3,200"
+)
+assert delta == 6, f"one answer must be charged once, got {delta}"
+
+# Resolution settles each provisional charge (no API: the settlement is pure).
+from models import VerificationResult, VerificationStatus
+from resolution import settle_provisional
+
+def _settle(status, post_check):
+    st = GameState(case=case)
+    st.provisional_findings = {"The restaurant added an extra zero.": 10}
+    st.provisional_post_check = {"The restaurant added an extra zero.": post_check}
+    ver = [] if status is None else [VerificationResult(
+        claim="The restaurant added an extra zero.", status=status,
+        basis="b", consequence="c", evidentiary_impact=EvidentiaryImpact.DECISIVE,
+    )]
+    return settle_provisional(st, ver)
+
+assert _settle(VerificationStatus.CONFIRMED, "high") == 10, "a true excuse is refunded"
+assert _settle(VerificationStatus.DISPROVED, "high") == 10, (
+    "a disproof adds the full impact itself; the room's share must come off so it counts once"
+)
+assert _settle(VerificationStatus.INCONCLUSIVE, "high") == 10, (
+    "nothing found on a claim a check was expected to settle: refunded"
+)
+assert _settle(VerificationStatus.INCONCLUSIVE, "low") == 0, (
+    "nothing found on a claim nobody could check: stays charged"
+)
+assert _settle(None, "medium") == 10 and _settle(None, "none") == 0
 
 print("SMOKE TEST PASSED")

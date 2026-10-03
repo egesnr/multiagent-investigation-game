@@ -8,18 +8,17 @@ Player answer
 → Extractor  
 → Checker  
 → Shared Context  
-→ internal War Room:
-- Evidence Analyst
-- Skeptical Investigator
-- Alternative-Hypothesis Investigator  
-→ Lead Strategist  
+→ internal War Room (two calls, neither sees the other):
+- Depth: stays on the story the suspect is telling now and finds its next crack
+- Breadth: looks at the rest of the file for what would break that story from outside or open new ground  
+→ Lead Investigator  
 → Speaker
 
 After the interview:
 → Resolution Agent  
 → final outcome
 
-The War Room is good cop / bad cop by design: the Skeptical Investigator always argues for pressing harder, the Alternative-Hypothesis Investigator always argues the innocent reading, and the Lead Strategist has to pick a side each turn rather than split the difference.
+The Lead decides what to pursue: each turn it judges whether the line it is on is still producing (new details, shifts, retreats) or has gone dead, and takes the depth move, the breadth move, or one question that does both. The Speaker decides how to say it, as the investigator in the room.
 
 ## What this is
 
