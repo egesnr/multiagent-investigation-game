@@ -212,6 +212,40 @@ def _normalize(text: str) -> str:
     return " ".join(text.lower().split())
 
 
+def settle_provisional(state: GameState, verifications: list[VerificationResult]) -> int:
+    """How much of the provisional suspicion charged in the room comes back off.
+
+    Each unverified excuse put game_logic.PROVISIONAL_SHARE of what it would
+    cost if false on the board in the room. Here it is settled:
+      confirmed -> refunded: the suspect was telling the truth.
+      disproved -> refunded too, because the verification adds the claim's
+                   verified impact to delta and the room's share was an advance
+                   on it; without this the claim counted twice.
+      nothing   -> refunded only when an outside check was expected to settle
+                   it (post-game checkability medium/high). An excuse nobody
+                   could ever check stays charged: a liar must not walk away
+                   on things that cannot be looked up.
+    """
+    refund = 0
+    for claim_text, points in state.provisional_findings.items():
+        c_norm = _normalize(claim_text)
+        match = next(
+            (
+                v for v in verifications
+                if (v_norm := _normalize(v.claim)) == c_norm
+                or (len(c_norm) > 20 and (c_norm in v_norm or v_norm in c_norm))
+            ),
+            None,
+        )
+        if match is not None and match.status in (
+            VerificationStatus.CONFIRMED, VerificationStatus.DISPROVED,
+        ):
+            refund += points
+        elif state.provisional_post_check.get(claim_text) in ("medium", "high"):
+            refund += points
+    return refund
+
+
 def run_resolution(state: GameState) -> ResolutionReport:
     facts = format_facts(state.case.facts)
     policy = "\n".join(f"- {p}" for p in state.case.policy_rules)
@@ -278,21 +312,7 @@ def run_resolution(state: GameState) -> ResolutionReport:
 
     delta = _verification_delta(verifications)
 
-    # Give back suspicion points for excuses that turned out to be true. In the
-    # room an unsupported defense raises suspicion (game_logic.PROVISIONAL_POINTS)
-    # because a liar must not profit from saying things nobody can check on the
-    # spot — but a suspect who was telling the truth all along should not be
-    # left carrying that penalty once verification confirms them.
-    refund = 0
-    for v in verifications:
-        if v.status != VerificationStatus.CONFIRMED:
-            continue
-        v_norm = _normalize(v.claim)
-        for claim_text, points in state.provisional_findings.items():
-            c_norm = _normalize(claim_text)
-            if v_norm == c_norm or (len(c_norm) > 20 and (c_norm in v_norm or v_norm in c_norm)):
-                refund += points
-                break
+    refund = settle_provisional(state, verifications)
 
     final_score = state.score + delta - refund
 

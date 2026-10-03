@@ -61,8 +61,10 @@ def _format_checker_results(results) -> str:
             f"  basis={r.basis.value}, visible={r.investigator_visible}, "
             f"type={r.claim_type.value}, status={r.verification_status.value}, "
             f"ambiguous={r.ambiguous}\n"
-            f"  strategic_value={r.strategic_value}, "
+            f"  potential_impact={r.potential_impact.value}, "
+            f"in_game_check={r.in_game_check.value}, "
             f"future_verification_value={r.future_verification_value.value}, "
+            f"closes_gap={r.closes_gap}, "
             f"evidentiary_impact={r.evidentiary_impact.value}\n"
             f"  contradiction={rp.fact_contradiction or rp.story_contradiction}, "
             f"policy_breach={rp.policy_breach}, credibility_issue={rp.credibility_issue}, "
@@ -306,11 +308,11 @@ def run_turn(
         if stale_note and stale_note not in state.case_log.exhausted_targets:
             state.case_log.exhausted_targets.append(stale_note)
 
-    if mind.unused_facts:
-        print(f"  [unused facts] {', '.join(mind.unused_facts)}")
-    for item in mind.inferences:
-        print(f"  [inference] {item}")
-    print(f"  [war room] innocent_reading_won={mind.innocent_reading_won}")
+    state.lead_board = mind.board
+    print(f"  [depth] {war_room.depth.next_crack} | timing: {war_room.depth.evidence_timing}")
+    print(f"  [breadth] {war_room.breadth.move} | timing: {war_room.breadth.evidence_timing}")
+    print("  [board]\n    " + mind.board.replace("\n", "\n    "))
+    print(f"  [decision] {mind.decision}")
 
     # An account where nothing can be checked is a finding in its own right. Without it, a suspect who
     # answers every question with something unverifiable ("can't recall",
@@ -332,7 +334,6 @@ def run_turn(
             investigator_visible=True,
             claim_type=ClaimType.CONTRADICTION,
             verification_status=ClaimStatus.CONTRADICTED,
-            strategic_value="high",
             evidentiary_impact=pattern.evidentiary_impact,
             risk_profile=RiskProfile(credibility_issue=True),
         ))
@@ -372,7 +373,10 @@ def run_turn(
             f"basis={result.basis.value} | visible={result.investigator_visible} | "
             f"status={result.verification_status.value} | ambiguous={result.ambiguous} | "
             f"impact={result.evidentiary_impact.value} | "
+            f"potential={result.potential_impact.value} | "
+            f"in_game={result.in_game_check.value} | "
             f"future={result.future_verification_value.value} | "
+            f"closes_gap={result.closes_gap} | "
             f"contradiction={rp.fact_contradiction or rp.story_contradiction} | "
             f"policy_breach={rp.policy_breach} | "
             f"evasion={rp.evasion} | credibility_issue={rp.credibility_issue} — "
@@ -426,10 +430,10 @@ def run_turn(
         + ("\n".join(f"- {d}" for d in extracted.new_defenses) or "- None")
         + "\n\nCHECKER FINDINGS:\n"
         + _format_checker_results(results)
-        + "\n\nBAD COP / SKEPTIC:\n"
-        + json.dumps(war_room.skeptic.model_dump(), indent=2, ensure_ascii=False)
-        + "\n\nGOOD COP / ALTERNATIVE HYPOTHESIS:\n"
-        + json.dumps(war_room.alternative.model_dump(), indent=2, ensure_ascii=False)
+        + "\n\nWAR ROOM / DEPTH (the current story):\n"
+        + json.dumps(war_room.depth.model_dump(), indent=2, ensure_ascii=False)
+        + "\n\nWAR ROOM / BREADTH (the rest of the file):\n"
+        + json.dumps(war_room.breadth.model_dump(), indent=2, ensure_ascii=False)
         + "\n\nLEAD INVESTIGATOR:\n"
         + json.dumps(mind.model_dump(), indent=2, ensure_ascii=False)
         + "\n\nSTATE AFTER TURN:\n"
@@ -439,13 +443,13 @@ def run_turn(
         + json.dumps(state.case_log.investigator_view(), indent=2, ensure_ascii=False)
     )
 
-    state.last_move = move.target
+    state.last_move = move.aim
     state.move_history.append(state.last_move)
 
     for item in move.target_grounding:
         print(f"  [target grounding] {item}")
     print(
-        f"  [strategy] aim={move.aim} | target={move.target} | "
+        f"  [strategy] aim={move.aim} | "
         f"remaining={state.max_questions - state.question_count}"
     )
 

@@ -236,8 +236,30 @@ class InvestigativeSignificance(BaseModel):
     claim: str
     risk_profile: RiskProfile = Field(default_factory=RiskProfile)
     claim_type: ClaimType = ClaimType.BACKGROUND
-    strategic_value: str = Field(default="low", description="One of: low, medium, high")
-    future_verification_value: FutureVerificationValue = FutureVerificationValue.NONE
+    potential_impact: EvidentiaryImpact = Field(
+        default=EvidentiaryImpact.NONE,
+        description="If this claim were shown false, how much would that "
+        "weigh against the suspect? Same scale and rubric as "
+        "evidentiary_impact, applied to the claim being false rather than to "
+        "what is established now.",
+    )
+    in_game_check: FutureVerificationValue = Field(
+        default=FutureVerificationValue.NONE,
+        description="How far the claim can be tested in the room, against the "
+        "known facts, the policy and the suspect's own earlier words.",
+    )
+    future_verification_value: FutureVerificationValue = Field(
+        default=FutureVerificationValue.NONE,
+        description="How surely it can be checked after the interview, from "
+        "records, cameras, the merchant or another person.",
+    )
+    closes_gap: bool = Field(
+        default=True,
+        description="For a defense: if it were true, would it account for "
+        "any part of the allegation, however weakly? False only for an answer "
+        "that would leave the allegation exactly as unexplained even if true. "
+        "When unsure, true.",
+    )
     evidentiary_impact: EvidentiaryImpact = EvidentiaryImpact.NONE
     suggested_thread: Optional[str] = Field(
         default=None,
@@ -273,8 +295,10 @@ class CheckResult(BaseModel):
 
     claim_type: ClaimType = ClaimType.BACKGROUND
     verification_status: ClaimStatus = ClaimStatus.UNVERIFIED
-    strategic_value: str = Field(default="low", description="One of: low, medium, high")
+    potential_impact: EvidentiaryImpact = EvidentiaryImpact.NONE
+    in_game_check: FutureVerificationValue = FutureVerificationValue.NONE
     future_verification_value: FutureVerificationValue = FutureVerificationValue.NONE
+    closes_gap: bool = True
     evidentiary_impact: EvidentiaryImpact = EvidentiaryImpact.NONE
     suggested_thread: Optional[str] = None
 
@@ -297,7 +321,8 @@ class ClaimRecord(BaseModel):
     investigator_visible: bool = True
     relation: EvidenceRelation = EvidenceRelation.NEUTRAL
     claim_type: ClaimType = ClaimType.BACKGROUND
-    strategic_value: str = "low"
+    potential_impact: EvidentiaryImpact = EvidentiaryImpact.NONE
+    in_game_check: FutureVerificationValue = FutureVerificationValue.NONE
     future_verification_value: FutureVerificationValue = FutureVerificationValue.NONE
     evidentiary_impact: EvidentiaryImpact = EvidentiaryImpact.NONE
     suggested_thread: Optional[str] = None
@@ -490,6 +515,30 @@ class CaseLog(BaseModel):
     parked_threads: list[str] = Field(default_factory=list)
     exhausted_targets: list[str] = Field(default_factory=list)
 
+    def room_view(self) -> dict:
+        """What the war room and the Lead need from the log: each claim's
+        wording, standing and weight, and what is already established.
+
+        investigator_view() was ~4,800 tokens by turn 6 — more than half the
+        Lead's prompt, paid again by both war-room calls — and most of it was
+        the Checker's working (rationale, basis, suggested outside checks,
+        parked threads) plus the same claims repeated in four lists.
+        """
+        return {
+            "claims": [
+                {
+                    "text": c.text,
+                    "status": c.status.value,
+                    "impact_now": c.evidentiary_impact.value,
+                    "potential_if_false": c.potential_impact.value,
+                }
+                for c in self.claims if c.investigator_visible
+            ],
+            "contradictions": list(self.contradictions),
+            "admissions": list(self.admissions),
+            "credibility_flags": list(self.credibility_flags),
+        }
+
     def investigator_view(self) -> dict:
         """Safe shared context for War Room/Speaker; hidden-truth findings are removed.
 
@@ -596,11 +645,14 @@ class InvestigatorMind(BaseModel):
     a conclusion that needed an authored fact, a policy rule and the suspect's
     answer at the same time, because no agent held all three.
 
-    Field order is the reasoning order. unused_facts and inferences come
-    before every judgment for the same reason case_review precedes target:
-    structured output is generated in schema order, so the model must walk
-    the evidence and draw conclusions from it BEFORE it is allowed to pick
-    what to ask.
+    Field order is the reasoning order: structured output is generated in
+    schema order, so the board and the decision are written BEFORE the
+    target. The reasoning about the evidence happens in the two
+    war-room calls (one on the current story, one on the rest of the file);
+    the Lead weighs them. An earlier version also made the Lead list every
+    unused fact and every inference, and check each target against all past
+    moves: together those pushed it to tour the file instead of staying on a
+    story that was coming apart.
     """
 
     # --- 1. did they answer the question? ---
@@ -622,13 +674,15 @@ class InvestigatorMind(BaseModel):
     )
     was_it_given: str = Field(
         default="",
-        description="Does what they offered address what you asked? Yes or no, "
-        "and why. This is a question about RESPONSIVENESS ONLY. A lie is an "
-        "answer. A hostile, vague or partial reply that engages with the "
-        "question is an answer. Disbelieving it, or being able to disprove it, "
-        "does not make it a non-answer — that is what the rest of the pipeline "
-        "is for. Only a reply that changes the subject, complains about the "
-        "question, or tells you to look it up yourself is a non-answer.",
+        description="Did they engage with what you asked? Yes or no, and why. "
+        "This is about ENGAGEMENT ONLY, not about whether the answer satisfies "
+        "you. A lie engages. A hostile, vague, partial or thin reply engages. "
+        "An excuse instead of the explanation you wanted engages. Rejecting "
+        "the question's premise ('nobody', 'that didn't happen', 'I don't "
+        "know') engages. If you find yourself writing that they engaged, the "
+        "answer is yes. Only a reply that changes the subject, complains about "
+        "the question, or tells you to look it up yourself is a no. What their "
+        "answer left out is for your next question.",
     )
     subject_dodged: Optional[str] = Field(
         default=None,
@@ -656,29 +710,6 @@ class InvestigatorMind(BaseModel):
         "they have told it so far across the whole interview, in their own "
         "logic — not whether you believe it."
     )
-    unused_facts: list[str] = Field(
-        default_factory=list,
-        description="Go through the known facts one by one and list every fact "
-        "that has NOT yet been put to the suspect in any question. Just the "
-        "fact ids or short labels. This is a checklist, not a judgment: if a "
-        "fact is sitting there unused, it belongs in this list even if you do "
-        "not intend to use it this turn. Empty only when genuinely all of them "
-        "have been raised."
-    )
-    inferences: list[str] = Field(
-        default_factory=list,
-        description="What follows from combining the facts, the policy rules "
-        "and what the suspect has actually said — conclusions nobody has "
-        "stated yet. Cover both halves: what follows about the SUSPECT, and "
-        "what follows about ANYONE OR ANYTHING ELSE involved — what another "
-        "person, business or system would have done or noticed if their "
-        "account were true, and whether the suspect behaved like someone for "
-        "whom it was true. The second half is the one that gets forgotten, and "
-        "it is usually where an account comes apart. Do the arithmetic where "
-        "it bites. Each entry must be derivable from known_facts, the policy, "
-        "or the suspect's own words — never from something you assume or would "
-        "like to be true. Empty if nothing genuinely follows."
-    )
 
     # --- 3. findings that score ---
     unfalsifiable_account: Optional[SelfContradiction] = Field(
@@ -703,62 +734,38 @@ class InvestigatorMind(BaseModel):
     # two calls that could not see each other's answer. One model writing both
     # sides in sequence is not a debate — it already knows which side it wants,
     # and can write a weak innocent reading to justify it.
-    case_review: str = Field(
-        description="Having weighed both readings above, think through the case "
-        "before deciding anything: the suspect's actual central claim, which "
-        "unresolved points carry high strategic value regardless of how long "
-        "ago they were raised, and which of those is still genuinely untested. "
-        "Your target must follow from this. Every factual assertion here must "
-        "trace to known_facts, the policy, or the case log — if something is "
-        "unconfirmed, say so."
+    board: str = Field(
+        description="Your board, updated with this answer: the suspect's "
+        "claims that matter, each with how it could be false (what else would "
+        "explain the same facts, and what would tell the two apart), what you "
+        "have found on it so far, and what it could still yield. Short lines, not "
+        "prose. Carried to your next turn."
     )
-    repetition_check: str = Field(
-        description="Restate what EVERY move in move_history was actually "
-        "asking — the underlying question, not the wording — then check "
-        "whether your planned target asks any one of them again in different "
-        "clothes. Judge by meaning: a question from turn 1 is exactly as "
-        "repeated as one from last turn. If it repeats, pick a different "
-        "thread and say so here."
+    decision: str = Field(
+        description="The one question you will ask and why it beats the best "
+        "alternative on the board, given the questions left: what its answer "
+        "could establish, and what evidence you show or keep back with it. "
+        "Take a colleague's question or your own. Check it does not ask for "
+        "something they have already told you."
     )
     target_grounding: list[str] = Field(
         default_factory=list,
-        description="Before writing the target: every specific your target "
+        description="Before writing the aim: every specific your question "
         "will use — an amount, a date, a document, a transaction, something "
         "the suspect saw — as 'specific — source', where the source is a fact "
         "id in square brackets, or the suspect's exact "
         "words in quotation marks. The number or name must appear in what you "
         "cite. Something the suspect's words only suggest exists has no id "
         "and no quote of its own: you may ask them about it, never name it. Empty "
-        "when the target uses no specifics.",
-    )
-    target: str = Field(
-        description="Free-form thread to pursue next, carrying both what you "
-        "are going after and how you intend to come at it, as you would tell a "
-        "partner ('corner him on the shifting story about the notifications'). "
-        "Any specific you reference — a number, a document, something the "
-        "suspect saw — must be something they actually said or a fact from "
-        "known_facts. Never invent a specific because it seems a likely "
-        "inference."
+        "when the question uses no specifics.",
     )
     aim: str = Field(
         default="",
-        description="What you want the suspect to give you this turn, in a "
-        "few words: the thing to find out, pin down or get them to admit. A "
-        "goal, not a sentence to say to them. This, not the target, is what "
+        description="The one thing you want the suspect to give you this "
+        "turn, in a few words: a single question's worth, never two. A goal, "
+        "not a sentence to say to them. This is what "
         "reaches the person who speaks to the suspect.",
     )
-    innocent_reading_won: bool = Field(
-        description="True if the Alternative's read actually changed what you "
-        "are about to do — softened the target, redirected it, or stopped you "
-        "pressing something. False if you went with the Skeptic. Answer for "
-        "what you actually did, not for what sounds balanced."
-    )
-    rationale: str = Field(
-        description="Why this move over the other side's. Name which read won "
-        "and why the other was outweighed — an adjudication, not a restatement "
-        "of both."
-    )
-    expected_value: str = Field(default="medium", description="low, medium, or high")
 
 
 class VerificationStatus(str, Enum):
@@ -825,7 +832,15 @@ class GameState(BaseModel):
     # unverified defense. Resolution refunds these if verification confirms
     # the claim was true, so a suspect is never permanently punished for an
     # excuse that turns out to be honest.
+    # The Lead's running board of the suspect's claims (how each could be
+    # false, what was found, what it could still yield), carried turn to turn.
+    lead_board: str = ""
+
     provisional_findings: dict[str, int] = Field(default_factory=dict)
+    # Per provisional claim: how checkable it is after the interview. An
+    # excuse nothing turns up on is refunded only when a check was expected
+    # to settle it (see resolution).
+    provisional_post_check: dict[str, str] = Field(default_factory=dict)
     last_turn_delta: int = 0
     last_turn_usefulness: str = "unknown"
     last_world_notice: Optional[str] = None
